@@ -16,6 +16,8 @@ func registerRoutes(r *mux.Router) {
 	r.HandleFunc("/sessions/{id}/vote", vote).Methods("POST")
 	r.HandleFunc("/sessions/{id}/results", getResults).Methods("GET")
 	r.HandleFunc("/test", test).Methods("GET")
+	r.HandleFunc("/sessions/{id}/players/{playerName}", removePlayer).Methods("DELETE")
+
 }
 
 func createSession(w http.ResponseWriter, r *http.Request) {
@@ -186,6 +188,43 @@ func getResults(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 }
+func removePlayer(w http.ResponseWriter, r *http.Request) {
+	vars := mux.Vars(r)
+	sessionID := vars["id"]
+	playerName := vars["playerName"]
+
+	session, err := getSession(sessionID)
+	if err != nil {
+		http.Error(w, "Sesja nie znaleziona", http.StatusNotFound)
+		return
+	}
+
+	// Usuń gracza z listy
+	updatedPlayers := []string{}
+	found := false
+	for _, p := range session.Players {
+		if p != playerName {
+			updatedPlayers = append(updatedPlayers, p)
+		} else {
+			found = true
+		}
+	}
+
+	if !found {
+		http.Error(w, "Gracz nie znaleziony w sesji", http.StatusNotFound)
+		return
+	}
+
+	session.Players = updatedPlayers
+
+	if err := saveSession(session); err != nil {
+		http.Error(w, "Błąd przy aktualizacji sesji", http.StatusInternalServerError)
+		return
+	}
+
+	w.WriteHeader(http.StatusNoContent)
+}
+
 
 func test(w http.ResponseWriter, r *http.Request) {
 	err := json.NewEncoder(w).Encode("test")
