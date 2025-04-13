@@ -1,0 +1,10 @@
+{
+    "tabWidth": 4,
+    "semi": true,
+    "arrowParens": "avoid",
+    "bracketSameLine": false,
+    "endOfLine": "lf",
+    "printWidth": 100,
+    "singleAttributePerLine": false,
+    "plugins": ["prettier-plugin-organize-imports"]
+}
