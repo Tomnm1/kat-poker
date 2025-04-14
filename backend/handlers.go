@@ -188,6 +188,7 @@ func getResults(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 }
+
 func removePlayer(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
 	sessionID := vars["id"]
@@ -222,7 +223,12 @@ func removePlayer(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	w.WriteHeader(http.StatusNoContent)
+	w.Header().Set("Content-Type", "application/json")
+	err = json.NewEncoder(w).Encode(session.CurrentRound)
+	if err != nil {
+		http.Error(w, "Wystąpił błąd", http.StatusInternalServerError)
+		return
+	}
 }
 
 

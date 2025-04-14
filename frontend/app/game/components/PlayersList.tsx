@@ -6,12 +6,12 @@ interface PlayersListProps {
 
 const PlayersList: React.FC<PlayersListProps> = ({ players }) => {
     return (
-        <div className="absolute top-4 right-4 bg-white p-4 rounded shadow-lg max-w-xs">
-            <h3 className="text-lg font-semibold text-gray-700">Players List</h3>
+        <div className="absolute top-4 right-4 bg-white/20 p-4 rounded shadow-4xl max-w-xs">
+            <h3 className="text-lg font-semibold text-white-500">Players List</h3>
             <ul className="mt-2">
                 {players.length > 0 ? (
                     players.map((player, index) => (
-                        <li key={index} className="text-gray-600">
+                        <li key={index} className="text-gray-400">
                             {player}
                         </li>
                     ))

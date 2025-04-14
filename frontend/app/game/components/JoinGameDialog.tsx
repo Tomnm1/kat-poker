@@ -39,7 +39,7 @@ const JoinGameDialog: React.FC<JoinGameDialogProps> = ({ gameId, onSuccess, onEr
     };
 
     return (
-        <div className="fixed inset-0 flex items-center justify-center   bg-opacity-50 z-50">
+        <div className="fixed inset-0 flex items-center justify-center bg-opacity-50 backdrop-blur-sm z-50">
             <div className="bg-gray-900 p-6 rounded-lg shadow-lg max-w-sm w-full">
                 <h2 className="text-2xl font-semibold  mb-4">
                     Enter your username to join the game
@@ -58,7 +58,7 @@ const JoinGameDialog: React.FC<JoinGameDialogProps> = ({ gameId, onSuccess, onEr
                 <button
                     onClick={handleJoinGame}
                     disabled={loading}
-                    className={`w-full px-4 py-2 text-lg font-semibold text-white bg-green-600 rounded hover:bg-green-700 transition duration-200 ${loading ? "bg-gray-400 cursor-not-allowed" : ""}`}
+                    className={`w-full px-4 py-2 text-lg font-semibold text-white bg-green-600 rounded hover:bg-green-700 transition duration-200 cursor-pointer ${loading ? "bg-gray-400 cursor-not-allowed" : ""}`}
                 >
                     {loading ? "Joining..." : "Join Game"}
                 </button>
