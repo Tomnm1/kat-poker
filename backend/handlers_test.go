@@ -84,6 +84,62 @@ func TestJoinSession(t *testing.T) {
 	}
 }
 
+func TestRemovePlayer(t *testing.T) {
+	router := setupRouter()
+
+	sessionData := map[string]interface{}{
+		"name": "TestRemovePlayer",
+	}
+	body, _ := json.Marshal(sessionData)
+	req, _ := http.NewRequest("POST", "/sessions", bytes.NewBuffer(body))
+	req.Header.Set("Content-Type", "application/json")
+	rr := httptest.NewRecorder()
+	router.ServeHTTP(rr, req)
+
+	var session Session
+	if err := json.Unmarshal(rr.Body.Bytes(), &session); err != nil {
+		t.Fatal(err)
+	}
+
+	joinData := map[string]string{
+		"playerName": "Ania",
+	}
+	joinBody, _ := json.Marshal(joinData)
+	joinReq, _ := http.NewRequest("POST", "/sessions/"+session.ID+"/join", bytes.NewBuffer(joinBody))
+	joinReq.Header.Set("Content-Type", "application/json")
+	joinRr := httptest.NewRecorder()
+	router.ServeHTTP(joinRr, joinReq)
+
+	if joinRr.Code != http.StatusOK {
+		t.Fatalf("Błąd przy dołączaniu gracza: %v", joinRr.Code)
+	}
+
+	removeReq, _ := http.NewRequest("DELETE", "/sessions/"+session.ID+"/players/Ania", nil)
+	removeRr := httptest.NewRecorder()
+	router.ServeHTTP(removeRr, removeReq)
+
+	if removeRr.Code != http.StatusNoContent {
+		t.Errorf("oczekiwano 204, otrzymano %v", removeRr.Code)
+	}
+
+	removeReq2, _ := http.NewRequest("DELETE", "/sessions/"+session.ID+"/players/NieIstnieje", nil)
+	removeRr2 := httptest.NewRecorder()
+	router.ServeHTTP(removeRr2, removeReq2)
+
+	if removeRr2.Code != http.StatusNotFound {
+		t.Errorf("oczekiwano 404 dla nieistniejącego gracza, otrzymano %v", removeRr2.Code)
+	}
+
+	removeReq3, _ := http.NewRequest("DELETE", "/sessions/fakeID/players/Ania", nil)
+	removeRr3 := httptest.NewRecorder()
+	router.ServeHTTP(removeRr3, removeReq3)
+
+	if removeRr3.Code != http.StatusNotFound {
+		t.Errorf("oczekiwano 404 dla nieistniejącej sesji, otrzymano %v", removeRr3.Code)
+	}
+}
+
+
 func TestVote(t *testing.T) {
 	router := setupRouter()
 
