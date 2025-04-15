@@ -1,11 +1,14 @@
 // app/game/[id]/page.tsx
 "use client";
 
-import { getData } from "@/app/utils/http";
-import { useParams } from "next/navigation";
+import { getData, postData } from "@/app/utils/http";
+import { useParams, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import JoinGameDialog from "../components/JoinGameDialog";
 import PlayersList from "../components/PlayersList";
+import Link from "next/link";
+import { deleteData } from "@/app/utils/api/delete";
+import Card from "../components/Card";
 
 const GamePage = () => {
     const { id } = useParams(); // Pobierz ID gry z URL
@@ -15,6 +18,15 @@ const GamePage = () => {
     const [gameName, setGameName] = useState<string>(""); // Stan do przechowywania nazwy gry
     const [username, setUsername] = useState<string | null>(null); // Stan do przechowywania nazwy użytkownika
     const [playersList, setPlayersList] = useState<string[]>([]); // Stan do przechowywania listy graczy
+    const [loading, setLoading] = useState<boolean>(false); // Stan ładowania dla zapytania
+    const [roundStarted, setRoundStarted] = useState<boolean>(false);
+    const [selectedValue, setSelectedValue] = useState<number | null>(null);
+    const [usersChoices, setUsersChoices] = useState<{ [username: string]: number }>({});
+    const [submitted, setSubmitted] = useState(false);
+    const [revealed, setRevealed] = useState(false);
+    const storyPoints = [1, 2, 3, 5, 8, 13, 20, 40];
+
+    const router = useRouter(); // Hook do obsługi nawigacji
 
     // Używamy useEffect, aby upewnić się, że id jest dostępne
     useEffect(() => {
@@ -59,31 +71,199 @@ const GamePage = () => {
         setError(errorMessage);
     };
 
+    const quitGame = async () => {
+        if (!gameId) return;
+
+        setLoading(true);
+        setError("");
+
+        try {
+            await deleteData(`/sessions/${gameId}/players/${username}`);
+            router.push(`/`);
+        } catch (error: any) {
+            setError(error.message || "Something went wrong.");
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const startRound = async () => {
+        if (!gameId || roundStarted) return;
+        try {
+            const response = await postData(`/sessions/${gameId}/start`, {});
+            setRoundStarted(true);
+        } catch (error: any) {
+            setError(error.message || "Something went wrong.");
+        } finally {
+            setLoading(false);
+        }
+    }
+
+    const handleCardToggle = (value: number) => {
+        if (selectedValue === value) {
+            setSelectedValue(null);
+        } else {
+            setSelectedValue(value);
+        }
+    };
+
+    const submitChoice = async () => {
+        if (!gameId || selectedValue === null || !username) return;
+    
+        setSelectedValue(selectedValue);
+        setUsersChoices(prev => ({
+            ...prev,
+            [username]: selectedValue,
+        }));
+    
+        setSubmitted(true);
+    
+        const response = await postData(`/sessions/${gameId}/vote`, 
+            { PlayerName: username, vote: selectedValue }
+        );
+    };
+
+    const unsubmitChoice = async () => {
+        if (!gameId || selectedValue === null || !username) return;
+        
+        setSelectedValue(null);
+        setUsersChoices(prev => {
+            const updated = { ...prev };
+            delete updated[username];
+            return updated;
+        });
+    
+        setSubmitted(false);
+    
+        // API unsubmit call
+        // const response = await postData(`/sessions/${gameId}/vote`, 
+        //     { PlayerName: username, vote: selectedValue }
+        // );
+    };    
+
+    const revealChoices = async () => {
+        if (!gameId) return;
+        setRevealed(true);
+        
+        const response = await getData(`/sessions/${gameId}/results`);
+        setUsersChoices(response["votes"]);
+    }
+
+    const hideChoices = async () => {
+        if (!gameId) return;
+        setRevealed(false);
+    }
+
     return (
         <div className="flex flex-col items-center justify-center min-h-screen p-24 text-center">
             {gameId ? (
                 <>
-                    <h1 className="text-4xl font-bold text-white mb-6">Game name: {gameName}</h1>
-                    <h1 className="text-xl font-bold text-white mb-6">
-                        Game ID: {gameId} (Send to other players)
-                    </h1>
-
-                    {!joined ? (
+                    {!joined && (
                         <JoinGameDialog
                             gameId={gameId}
                             onSuccess={handleSuccess}
                             onError={handleError}
                         />
-                    ) : (
-                        <div className="mt-6 text-green-500">
-                            <h2 className="text-2xl font-semibold">
-                                Successfully joined the game!
-                            </h2>
-                        </div>
                     )}
-                    <p className="mt-4 text-lg text-gray-400">Welcome to the game, {username}!</p>
+                    {!roundStarted && (<h2 className="text-lg font-normal">
+                        Welcome to KAT poker
+                        <span className="text-violet-500 font-semibold"> {username}</span>
+                        !
+                    </h2>)}
+                    <br></br>
+                    <h1 className="text-4xl font-bold text-white mb-6">
+                        Game name: <span className="text-red-500">{gameName}</span>
+                    </h1>
 
-                    {/* Wyświetlanie listy graczy */}
+                    <h1 className="text-2xl font-bold text-white mb-6">
+                        Game ID:
+                        <span className="text-red-300"> {gameId}</span>
+                        <br/>
+                        <span className="text-sm text-gray-500 font-normal">Copy and share it with other players.</span>
+                    </h1>
+                    <br/>
+                    {roundStarted &&(<h4 className="text-2xl font-bold text-violet-500 mb-2">
+                        {username}
+                    </h4>)}
+
+                    {!roundStarted ? <button
+                        onClick={startRound}
+                        className={`mt-5 px-4 py-2 text-lg font-semibold text-white bg-green-600 rounded hover:bg-green-700 transition duration-200 cursos-pointer`}
+                    >
+                        Start a round
+                    </button>
+                    : (<>
+                        {!submitted && (<span className="text-lg mb-2">Choose your estimation!</span>)}
+                        <br/>
+                        {submitted === false && (<div className="flex flex-wrap gap-4 justify-center mb-5">
+                            {storyPoints.map((num, idx) => (
+                                <Card key={idx} number={num} onClick={handleCardToggle} isSelected={selectedValue === num} />
+                            ))}
+                        </div>)}
+                        {selectedValue !== null && !revealed && (
+                            <div className="mt-4">
+                                <Card 
+                                    number={selectedValue} 
+                                    card_styles={`border-3 ${submitted ? 'border-blue-500' : 'border-green-300'}`}
+                                    text_styles={`${submitted ? 'text-blue-400' : 'text-green-500'}`}
+                                    isSelected={true}
+                                />
+                            </div>
+                        )}
+
+                        {revealed && (
+                            <div className="mt-4 flex flex-wrap gap-4">
+                                {Object.entries(usersChoices).map(([owner, number]) => (
+                                    <Card 
+                                        key={owner}
+                                        number={number}
+                                        isSelected={true}
+                                        owner={owner}
+                                    />
+                                ))}
+                            </div>
+                        )}
+
+
+                        {selectedValue && (<div className="flex flex-col">
+                            {submitted ? (<div>
+                                <button
+                                    onClick={unsubmitChoice}
+                                    disabled={selectedValue === null}
+                                    className={`mt-10 mr-5 px-4 py-2 text-lg font-semibold text-white bg-red-600 rounded hover:bg-red-700 transition duration-200 cursos-pointer`}
+                                >
+                                    Rollback your choice
+                                </button>
+                                {(!revealed ? <button
+                                    onClick={revealChoices}
+                                    className={`mt-4 px-4 py-2 text-lg font-semibold text-white bg-violet-600 rounded hover:bg-violet-700 transition duration-200 cursos-pointer`}
+                                >
+                                    Reveal your mates' choices
+                                </button>
+                                : <button
+                                    onClick={hideChoices}
+                                    className={`mt-4 px-4 py-2 text-lg font-semibold text-white bg-violet-600 rounded hover:bg-violet-700 transition duration-200 cursos-pointer`}
+                                >
+                                    Hide your mates' choices
+                                </button>)}
+                            </div>
+                            )
+                            : (<button
+                                onClick={submitChoice}
+                                disabled={selectedValue === null}
+                                className={`mt-10 px-4 py-2 text-lg font-semibold text-white bg-pink-600 rounded hover:bg-pink-700 transition duration-200 cursos-pointer`}
+                            >
+                                Submit your choice
+                            </button>)}
+                        </div>)}
+                    </>)}
+                    <Link
+                        href="/"
+                        className="mt-10 px-4 py-2 text-lg font-semibold text-white bg-gray-600 rounded hover:bg-gray-700 transition duration-200"
+                    >
+                        Quit the game
+                    </Link>
+
                     <PlayersList players={playersList} />
                 </>
             ) : (
