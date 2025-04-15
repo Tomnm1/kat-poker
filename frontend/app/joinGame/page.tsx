@@ -11,16 +11,25 @@ export default function JoinGamePage() {
     const [error, setError] = useState<string>("");
 
     const router = useRouter(); // Hook do obsługi nawigacji
+
+    const fetchRoundStarted = async () => {
+        const response = await getData(`/sessions/${gameId}/round-started`);
+        const round_started = response.roundStarted;
+        localStorage.setItem("round_started", round_started);
+        console.log("przekazane 1: ", round_started);
+    }
     //remove user data from local storage when the component mounts
     useEffect(() => {
         localStorage.removeItem("username");
     }, []);
+
     // Funkcja obsługująca wysyłanie zapytania o grę
     const handleSubmit = async () => {
         if (!gameId) {
             setError("Game ID cannot be empty.");
             return;
         }
+        // localStorage.removeItem("round_started");
 
         setLoading(true);
         setError("");
@@ -28,6 +37,7 @@ export default function JoinGamePage() {
         try {
             // Wysyłamy zapytanie, aby sprawdzić, czy gra o danym ID istnieje
             const response = await getData(`/sessions/${gameId}`); // Zakładając, że zapytanie do API zwraca odpowiedź o istnieniu gry
+            fetchRoundStarted();
 
             if (response && response.id) {
                 // Jeśli gra istnieje, przekieruj do strony gry

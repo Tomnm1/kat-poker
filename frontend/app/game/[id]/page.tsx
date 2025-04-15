@@ -6,7 +6,6 @@ import { useParams, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import JoinGameDialog from "../components/JoinGameDialog";
 import PlayersList from "../components/PlayersList";
-import Link from "next/link";
 import { deleteData } from "@/app/utils/api/delete";
 import Card from "../components/Card";
 
@@ -42,6 +41,10 @@ const GamePage = () => {
             setUsername(savedUsername);
             setJoined(true); // Jeśli nazwa użytkownika jest zapisana, uznaj, że użytkownik dołączył
         }
+
+        const round_started = localStorage.getItem("round_started");
+        setRoundStarted(round_started == "true");
+        console.log("odebrane: ", round_started);
 
         // Wysyłanie zapytania po liście graczy po załadowaniu strony
         if (gameId && joined) {
@@ -88,15 +91,19 @@ const GamePage = () => {
     };
 
     const startRound = async () => {
-        if (!gameId || roundStarted) return;
-        try {
-            const response = await postData(`/sessions/${gameId}/start`, {});
-            setRoundStarted(true);
-        } catch (error: any) {
-            setError(error.message || "Something went wrong.");
-        } finally {
-            setLoading(false);
+        if (!gameId) return;
+
+        if (!roundStarted) {
+            try {
+                await postData(`/sessions/${gameId}/start`, {});
+                setRoundStarted(true);
+            } catch (error: any) {
+                setError(error.message || "Something went wrong.");
+            } finally {
+                setLoading(false);
+            }
         }
+        
     }
 
     const handleCardToggle = (value: number) => {
@@ -123,23 +130,28 @@ const GamePage = () => {
         );
     };
 
-    const unsubmitChoice = async () => {
+    const rollbackChoice = async () => {
         if (!gameId || selectedValue === null || !username) return;
-        
-        setSelectedValue(null);
-        setUsersChoices(prev => {
-            const updated = { ...prev };
-            delete updated[username];
-            return updated;
-        });
     
-        setSubmitted(false);
-    
-        // API unsubmit call
-        // const response = await postData(`/sessions/${gameId}/vote`, 
-        //     { PlayerName: username, vote: selectedValue }
-        // );
-    };    
+        try {
+            await postData(`/sessions/${gameId}/rollback-vote`, 
+                { PlayerName: username }
+            );
+            setSubmitted(false);
+            setSelectedValue(null);
+            setUsersChoices(prev => {
+                const updated = { ...prev };
+                delete updated[username];
+                return updated;
+            });
+            console.log(usersChoices);
+        } catch (error: any) {
+            setError(error.message || "Something went wrong.");
+        }
+    };
+    useEffect(() => {
+        console.log("usersChoices updated:", usersChoices);
+    }, [usersChoices]);
 
     const revealChoices = async () => {
         if (!gameId) return;
@@ -212,7 +224,7 @@ const GamePage = () => {
                         )}
 
                         {revealed && (
-                            <div className="mt-4 flex flex-wrap gap-4">
+                            <div className="mt-4 mb-6 flex flex-wrap gap-4">
                                 {Object.entries(usersChoices).map(([owner, number]) => (
                                     <Card 
                                         key={owner}
@@ -227,13 +239,13 @@ const GamePage = () => {
 
                         {selectedValue && (<div className="flex flex-col">
                             {submitted ? (<div>
-                                <button
-                                    onClick={unsubmitChoice}
+                                {!revealed && <button
+                                    onClick={rollbackChoice}
                                     disabled={selectedValue === null}
                                     className={`mt-10 mr-5 px-4 py-2 text-lg font-semibold text-white bg-red-600 rounded hover:bg-red-700 transition duration-200 cursos-pointer`}
                                 >
                                     Rollback your choice
-                                </button>
+                                </button>}
                                 {(!revealed ? <button
                                     onClick={revealChoices}
                                     className={`mt-4 px-4 py-2 text-lg font-semibold text-white bg-violet-600 rounded hover:bg-violet-700 transition duration-200 cursos-pointer`}
@@ -257,12 +269,13 @@ const GamePage = () => {
                             </button>)}
                         </div>)}
                     </>)}
-                    <Link
-                        href="/"
-                        className="mt-10 px-4 py-2 text-lg font-semibold text-white bg-gray-600 rounded hover:bg-gray-700 transition duration-200"
+                    <button
+                        onClick={quitGame}
+                        disabled={loading}
+                        className={`mt-4 px-4 py-2 text-lg font-semibold text-white bg-gray-600 rounded hover:bg-gray-700 transition duration-200 cursos-pointer ${loading ? "bg-gray-400 cursor-not-allowed" : ""}`}
                     >
                         Quit the game
-                    </Link>
+                    </button>
 
                     <PlayersList players={playersList} />
                 </>

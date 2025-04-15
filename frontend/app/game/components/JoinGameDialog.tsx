@@ -1,8 +1,8 @@
 // components/JoinGameDialog.tsx
 "use client";
 
-import { postData } from "@/app/utils/http";
-import { useState } from "react";
+import { getData, postData } from "@/app/utils/http";
+import { useEffect, useState } from "react";
 
 interface JoinGameDialogProps {
     gameId: string;
@@ -14,6 +14,17 @@ const JoinGameDialog: React.FC<JoinGameDialogProps> = ({ gameId, onSuccess, onEr
     const [username, setUsername] = useState<string>(""); // Stan dla nazwy użytkownika
     const [loading, setLoading] = useState<boolean>(false); // Stan dla ładowania
     const [error, setError] = useState<string>(""); // Stan dla błędów
+
+    const fetchRoundStarted = async () => {
+        // localStorage.removeItem("round_started");
+        const response = await getData(`/sessions/${gameId}/round-started`);
+        const round_started = response.roundStarted;
+        localStorage.setItem("round_started", round_started);
+    }
+    
+    // useEffect(() => {
+    //     localStorage.removeItem("round_started");
+    // }, []);
 
     const handleJoinGame = async () => {
         if (!username) {
@@ -27,9 +38,9 @@ const JoinGameDialog: React.FC<JoinGameDialogProps> = ({ gameId, onSuccess, onEr
         try {
             // 	r.HandleFunc("/sessions/{id}/join", joinSession).Methods("POST")
             const response = await postData(`/sessions/${gameId}/join`, { PlayerName: username });
-            console.log("Joined game successfully:", response);
             onSuccess(); // Call onSuccess without passing username
             localStorage.setItem("username", username); // Zapisz nazwę użytkownika w localStorage
+            fetchRoundStarted();
         } catch (error: any) {
             setError(error.message || "Something went wrong.");
             onError(error.message || "Something went wrong.");
