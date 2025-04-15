@@ -269,7 +269,13 @@ func rollbackVote(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	w.WriteHeader(http.StatusNoContent)
+	// w.WriteHeader(http.StatusNoContent)
+	w.Header().Set("Content-Type", "application/json")
+	err = json.NewEncoder(w).Encode(session.CurrentRound)
+	if err != nil {
+		http.Error(w, "Wystąpił błąd", http.StatusInternalServerError)
+		return
+	}
 }
 
 func isRoundStarted(w http.ResponseWriter, r *http.Request) {
