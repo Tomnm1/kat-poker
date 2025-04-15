@@ -17,6 +17,9 @@ func registerRoutes(r *mux.Router) {
 	r.HandleFunc("/sessions/{id}/results", getResults).Methods("GET")
 	r.HandleFunc("/test", test).Methods("GET")
 	r.HandleFunc("/sessions/{id}/players/{playerName}", removePlayer).Methods("DELETE")
+	r.HandleFunc("/sessions/{id}/rollback-vote", rollbackVote).Methods("POST")
+	r.HandleFunc("/sessions/{id}/round-started", isRoundStarted).Methods("GET")
+
 
 }
 
@@ -200,7 +203,6 @@ func removePlayer(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Usuń gracza z listy
 	updatedPlayers := []string{}
 	found := false
 	for _, p := range session.Players {
@@ -230,6 +232,71 @@ func removePlayer(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 }
+
+func rollbackVote(w http.ResponseWriter, r *http.Request) {
+	vars := mux.Vars(r)
+	id := vars["id"]
+
+	session, err := getSession(id)
+	if err != nil {
+		http.Error(w, "Sesja nie znaleziona", http.StatusNotFound)
+		return
+	}
+
+	if session.CurrentRound == nil {
+		http.Error(w, "Runda nie została rozpoczęta", http.StatusBadRequest)
+		return
+	}
+
+	var payload struct {
+		PlayerName string `json:"playerName"`
+	}
+
+	if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
+		http.Error(w, "Błędne dane", http.StatusBadRequest)
+		return
+	}
+
+	if _, exists := session.CurrentRound.Votes[payload.PlayerName]; !exists {
+		http.Error(w, "Głos gracza nie istnieje", http.StatusNotFound)
+		return
+	}
+
+	delete(session.CurrentRound.Votes, payload.PlayerName)
+
+	if err := saveSession(session); err != nil {
+		http.Error(w, "Błąd przy zapisie sesji", http.StatusInternalServerError)
+		return
+	}
+
+	w.WriteHeader(http.StatusNoContent)
+}
+
+func isRoundStarted(w http.ResponseWriter, r *http.Request) {
+	vars := mux.Vars(r)
+	id := vars["id"]
+
+	session, err := getSession(id)
+	if err != nil {
+		http.Error(w, "Sesja nie znaleziona", http.StatusNotFound)
+		return
+	}
+
+	response := struct {
+		RoundStarted bool `json:"roundStarted"`
+	}{
+		RoundStarted: session.CurrentRound != nil,
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	err = json.NewEncoder(w).Encode(response)
+	if err != nil {
+		http.Error(w, "Wystąpił błąd", http.StatusInternalServerError)
+		return
+	}
+}
+
+
 
 
 func test(w http.ResponseWriter, r *http.Request) {
