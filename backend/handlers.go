@@ -6,7 +6,14 @@ import (
 	"net/http"
 
 	"github.com/gorilla/mux"
+	"github.com/gorilla/websocket"
 )
+
+var upgrader = websocket.Upgrader{
+	CheckOrigin: func(r *http.Request) bool { return true },
+}
+
+var wsConnections = make(map[string][]*websocket.Conn)
 
 func registerRoutes(r *mux.Router) {
 	r.HandleFunc("/sessions", createSession).Methods("POST")
@@ -20,7 +27,20 @@ func registerRoutes(r *mux.Router) {
 	r.HandleFunc("/sessions/{id}/rollback-vote", rollbackVote).Methods("POST")
 	r.HandleFunc("/sessions/{id}/round-started", isRoundStarted).Methods("GET")
 
+	r.HandleFunc("/sessions/{id}/ws", sessionWebSocket).Methods("GET")
 
+}
+
+func sessionWebSocket(w http.ResponseWriter, r *http.Request) {
+	vars := mux.Vars(r)
+	sessionID := vars["id"]
+	conn, err := upgrader.Upgrade(w, r, nil)
+	if err != nil {
+		http.Error(w, "Failed to upgrade to WebSocket", http.StatusInternalServerError)
+		return
+	}
+
+	wsConnections[sessionID] = append(wsConnections[sessionID], conn)
 }
 
 func createSession(w http.ResponseWriter, r *http.Request) {
@@ -90,6 +110,9 @@ func joinSession(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Błąd przy aktualizacji sesji", http.StatusInternalServerError)
 		return
 	}
+	for _, conn := range wsConnections[id] {
+		conn.WriteMessage(websocket.TextMessage, []byte("/player-joined"))
+	}
 
 	w.Header().Set("Content-Type", "application/json")
 	err = json.NewEncoder(w).Encode(session)
@@ -115,7 +138,12 @@ func startRound(w http.ResponseWriter, r *http.Request) {
 	}
 	session.CurrentRound = round
 
-	// TODO: Aktualizuj sesję w bazie
+	// Notify all WebSocket connections about the round start
+	for _, conn := range wsConnections[id] {
+		conn.WriteMessage(websocket.TextMessage, []byte("/starting"))
+	}
+
+	// Save the session with the new round
 	if err := saveSession(session); err != nil {
 		http.Error(w, "Błąd przy aktualizacji rundy", http.StatusInternalServerError)
 		return
@@ -225,6 +253,11 @@ func removePlayer(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Notify all WebSocket connections about the player removal
+	for _, conn := range wsConnections[sessionID] {
+		conn.WriteMessage(websocket.TextMessage, []byte("/player-left"))
+	}
+
 	w.Header().Set("Content-Type", "application/json")
 	err = json.NewEncoder(w).Encode(session.CurrentRound)
 	if err != nil {
@@ -301,9 +334,6 @@ func isRoundStarted(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 }
-
-
-
 
 func test(w http.ResponseWriter, r *http.Request) {
 	err := json.NewEncoder(w).Encode("test")
