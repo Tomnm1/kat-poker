@@ -1,7 +1,7 @@
 "use client";
 
 import { getData, postData } from "@/app/utils/http";
-import { useParams, useRouter } from "next/navigation";
+import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useState } from "react";
 import JoinGameDialog from "../components/JoinGameDialog";
 import PlayersList from "../components/PlayersList";
@@ -11,6 +11,9 @@ import { deleteData } from "@/app/utils/api/delete";
 const GamePage = () => {
     const { id } = useParams();
     const router = useRouter();
+    
+    const searchParams = useSearchParams();
+    const isInvite = searchParams.get("invite") === "true";
 
     const [joined, setJoined] = useState<boolean>(false);
     const [error, setError] = useState<string>("");
@@ -41,6 +44,11 @@ const GamePage = () => {
          if (gameId && joined) {
             fetchGameInfo();
         }
+
+        const invite = searchParams.get("invite");
+        if (invite === "true" && !joined) {
+            setJoined(false);
+        }
         const ws = new WebSocket(`ws://localhost:8080/sessions/${id}/ws`);
         ws.onmessage = (event) => {
             if (event.data === "/starting") {
@@ -49,6 +57,7 @@ const GamePage = () => {
             if(event.data=="/player-joined"||event.data=="/player-left"){
                 // Fetch the game info again to update the players list
                 fetchGameInfo();
+
 
             }
         };
@@ -104,6 +113,14 @@ const GamePage = () => {
         }
     };
 
+    const copyInviteLink = () => {
+        if (!gameId) return;
+        const inviteLink = `${window.location.origin}/game/${gameId}?invite=true`;
+        navigator.clipboard.writeText(inviteLink).then(() => {
+            alert("Invite link copied to clipboard!");
+        });
+    };
+
     return (
         <div className="flex flex-col items-center justify-center min-h-screen p-24 text-center">
             {gameId ? (
@@ -129,6 +146,12 @@ const GamePage = () => {
                     </h1>
 
                     <PlayersList players={playersList} />
+                    <button
+                        onClick={copyInviteLink}
+                        className="mt-3 px-4 py-2 text-lg font-semibold text-white bg-blue-600 rounded hover:bg-blue-700 transition duration-200"
+                    >
+                        Copy Invite Link
+                    </button>
 
                     {!roundStarted ? (
                         <button
