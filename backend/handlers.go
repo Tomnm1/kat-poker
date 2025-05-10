@@ -4,24 +4,35 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"errors"
+	"strings"
+	"time"
 
+	
 	"github.com/gorilla/mux"
+	"github.com/golang-jwt/jwt/v5"
 )
 
+var jwtSecret = []byte("tajny_klucz")
+
 func registerRoutes(r *mux.Router) {
-	r.HandleFunc("/sessions", createSession).Methods("POST")
-	r.HandleFunc("/sessions/{id}", getSessionHandler).Methods("GET")
-	r.HandleFunc("/sessions/{id}/join", joinSession).Methods("POST")
-	r.HandleFunc("/sessions/{id}/start", startRound).Methods("POST")
-	r.HandleFunc("/sessions/{id}/vote", vote).Methods("POST")
-	r.HandleFunc("/sessions/{id}/results", getResults).Methods("GET")
+	r.HandleFunc("/login", loginHandler).Methods("POST") // publiczny
+
+	// trasy wymagające autoryzacji JWT
+	r.HandleFunc("/sessions", JWTMiddleware(createSession)).Methods("POST")
+	r.HandleFunc("/sessions/{id}", JWTMiddleware(getSessionHandler)).Methods("GET")
+	r.HandleFunc("/sessions/{id}/join", JWTMiddleware(joinSession)).Methods("POST")
+	r.HandleFunc("/sessions/{id}/start", JWTMiddleware(startRound)).Methods("POST")
+	r.HandleFunc("/sessions/{id}/vote", JWTMiddleware(vote)).Methods("POST")
+	r.HandleFunc("/sessions/{id}/results", JWTMiddleware(getResults)).Methods("GET")
+	r.HandleFunc("/sessions/{id}/players/{playerName}", JWTMiddleware(removePlayer)).Methods("DELETE")
+	r.HandleFunc("/sessions/{id}/rollback-vote", JWTMiddleware(rollbackVote)).Methods("POST")
+	r.HandleFunc("/sessions/{id}/round-started", JWTMiddleware(isRoundStarted)).Methods("GET")
+
+	// ewentualnie testowa publiczna trasa
 	r.HandleFunc("/test", test).Methods("GET")
-	r.HandleFunc("/sessions/{id}/players/{playerName}", removePlayer).Methods("DELETE")
-	r.HandleFunc("/sessions/{id}/rollback-vote", rollbackVote).Methods("POST")
-	r.HandleFunc("/sessions/{id}/round-started", isRoundStarted).Methods("GET")
-
-
 }
+
 
 func createSession(w http.ResponseWriter, r *http.Request) {
 	var session Session
@@ -300,6 +311,86 @@ func isRoundStarted(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Wystąpił błąd", http.StatusInternalServerError)
 		return
 	}
+}
+
+func generateJWT(userID string) (string, error) {
+	claims := jwt.MapClaims{
+		"user_id": userID,
+		"exp":     time.Now().Add(24 * time.Hour).Unix(),
+		"iat":     time.Now().Unix(),
+	}
+
+	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
+	return token.SignedString(jwtSecret)
+}
+
+
+func verifyJWT(tokenString string) (string, error) {
+	token, err := jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {
+		// Sprawdzenie algorytmu
+		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
+			return nil, fmt.Errorf("nieprawidłowy algorytm: %v", token.Header["alg"])
+		}
+		return jwtSecret, nil
+	})
+	if err != nil {
+		return "", err
+	}
+
+	if claims, ok := token.Claims.(jwt.MapClaims); ok && token.Valid {
+		userID, ok := claims["user_id"].(string)
+		if !ok {
+			return "", errors.New("brak user_id w tokenie")
+		}
+		return userID, nil
+	}
+	return "", errors.New("token nieważny")
+}
+
+func JWTMiddleware(next http.HandlerFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		authHeader := r.Header.Get("Authorization")
+		if authHeader == "" || !strings.HasPrefix(authHeader, "Bearer ") {
+			http.Error(w, "Brak tokenu autoryzacyjnego", http.StatusUnauthorized)
+			return
+		}
+
+		tokenString := strings.TrimPrefix(authHeader, "Bearer ")
+
+		userID, err := verifyJWT(tokenString)
+		if err != nil {
+			http.Error(w, "Nieprawidłowy token: "+err.Error(), http.StatusUnauthorized)
+			return
+		}
+
+		// Można przekazać userID do kontekstu jeśli potrzebne
+		r.Header.Set("X-User-ID", userID)
+
+		next.ServeHTTP(w, r)
+	}
+}
+
+func loginHandler(w http.ResponseWriter, r *http.Request) {
+	var payload struct {
+		Username string `json:"username"`
+	}
+
+	if err := json.NewDecoder(r.Body).Decode(&payload); err != nil || payload.Username == "" {
+		http.Error(w, "Nieprawidłowe dane logowania", http.StatusBadRequest)
+		return
+	}
+
+	// TODO: sprawdzanie hasła i użytkownika w bazie
+
+	token, err := generateJWT(payload.Username)
+	if err != nil {
+		http.Error(w, "Błąd generowania tokenu", http.StatusInternalServerError)
+		return
+	}
+
+	json.NewEncoder(w).Encode(map[string]string{
+		"token": token,
+	})
 }
 
 
