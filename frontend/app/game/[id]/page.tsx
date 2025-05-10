@@ -68,6 +68,13 @@ const GamePage = () => {
                     [votedPlayer]: true,
                 }));
             }
+
+            if (message === "/all-voted") {
+                setRevealed(true); // Auto reveal if all have voted
+            }
+            if (message === "/reveals") {
+                setRevealed(true); // Reveal if creator chooses
+            }
         };
 
         const round_started = localStorage.getItem("round_started");
@@ -89,6 +96,15 @@ const GamePage = () => {
         setJoined(true);
         fetchGameInfo();
     };
+
+    const revealChoices = async () => {
+    if (!gameId) return;
+    try {
+        await postData(`/sessions/${gameId}/reveal`, {});
+    } catch (error: any) {
+        setError(error.message || "Something went wrong.");
+    }
+};
 
     const quitGame = async () => {
         if (!gameId || !username) return;
@@ -169,20 +185,30 @@ const GamePage = () => {
                             Start a round
                         </button>
                     ) : (
-                        <VotingPanel
-                            gameId={gameId}
-                            username={username}
-                            storyPoints={storyPoints}
-                            selectedValue={selectedValue}
-                            setSelectedValue={setSelectedValue}
-                            usersChoices={usersChoices}
-                            setUsersChoices={setUsersChoices}
-                            submitted={submitted}
-                            setSubmitted={setSubmitted}
-                            revealed={revealed}
-                            setRevealed={setRevealed}
-                            setError={setError}
-                        />
+                        <>
+                            <VotingPanel
+                                gameId={gameId}
+                                username={username}
+                                storyPoints={storyPoints}
+                                selectedValue={selectedValue}
+                                setSelectedValue={setSelectedValue}
+                                usersChoices={usersChoices}
+                                setUsersChoices={setUsersChoices}
+                                submitted={submitted}
+                                setSubmitted={setSubmitted}
+                                revealed={revealed}
+                                setRevealed={setRevealed}
+                                setError={setError}
+                            />
+                            {playersList.length > 0 && username === playersList[0] && !revealed && (
+                                <button
+                                    onClick={revealChoices}
+                                    className="mt-3 px-4 py-2 text-lg font-semibold text-white bg-blue-600 rounded hover:bg-blue-700 transition duration-200"
+                                >
+                                    Reveal Choices
+                                </button>
+                            )}
+                        </>
                     )}
 
                     <button

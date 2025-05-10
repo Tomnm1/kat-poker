@@ -26,7 +26,7 @@ func registerRoutes(r *mux.Router) {
 	r.HandleFunc("/sessions/{id}/players/{playerName}", removePlayer).Methods("DELETE")
 	r.HandleFunc("/sessions/{id}/rollback-vote", rollbackVote).Methods("POST")
 	r.HandleFunc("/sessions/{id}/round-started", isRoundStarted).Methods("GET")
-
+	r.HandleFunc("/sessions/{id}/reveal", revealResults).Methods("POST")
 	r.HandleFunc("/sessions/{id}/ws", sessionWebSocket).Methods("GET")
 
 }
@@ -194,6 +194,13 @@ func vote(w http.ResponseWriter, r *http.Request) {
 		conn.WriteMessage(websocket.TextMessage, []byte(message))
 	}
 
+	if len(session.CurrentRound.Votes) == len(session.Players) {
+		// If all have voted, notify to reveal
+		for _, conn := range wsConnections[id] {
+			conn.WriteMessage(websocket.TextMessage, []byte("/all-voted"))
+		}
+	}
+
 	w.Header().Set("Content-Type", "application/json")
 	err = json.NewEncoder(w).Encode(session.CurrentRound)
 	if err != nil {
@@ -223,6 +230,29 @@ func getResults(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Wystąpił błąd", http.StatusInternalServerError)
 		return
 	}
+}
+func revealResults(w http.ResponseWriter, r *http.Request) {
+	vars := mux.Vars(r)
+	id := vars["id"]
+
+	session, err := getSession(id)
+	if err != nil {
+		http.Error(w, "Sesja nie znaleziona", http.StatusNotFound)
+		return
+	}
+
+	// Notify all players to reveal choices
+	for _, conn := range wsConnections[id] {
+		conn.WriteMessage(websocket.TextMessage, []byte("/reveals"))
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	err = json.NewEncoder(w).Encode(session.CurrentRound)
+	if err != nil {
+		http.Error(w, "Wystąpił błąd", http.StatusInternalServerError)
+		return
+	}
+
 }
 
 func removePlayer(w http.ResponseWriter, r *http.Request) {

@@ -86,6 +86,12 @@ const VotingPanel: React.FC<VotingPanelProps> = ({
         }
     };
 
+     useEffect(() => {
+        if (revealed) {
+            revealChoices();
+        }
+    }, [revealed]);
+
     const hideChoices = () => {
         setRevealed(false);
     };
@@ -130,8 +136,8 @@ const VotingPanel: React.FC<VotingPanelProps> = ({
                 </div>
             )}
 
-            <div className="flex flex-col mt-4">
-                {submitted ? (
+           {!revealed &&(<div className="flex flex-col mt-4">
+                {submitted  ? (
                     <div>
                         {!revealed && (
                             <button
@@ -142,12 +148,7 @@ const VotingPanel: React.FC<VotingPanelProps> = ({
                                 Rollback your choice
                             </button>
                         )}
-                        <button
-                            onClick={revealed ? hideChoices : revealChoices}
-                            className="mt-2 px-4 py-2 text-lg font-semibold text-white bg-violet-600 rounded hover:bg-violet-700 transition duration-200"
-                        >
-                            {revealed ? "Hide Choices" : "Reveal Choices"}
-                        </button>
+                      
                     </div>
                 ) : (
                     <button
@@ -158,7 +159,7 @@ const VotingPanel: React.FC<VotingPanelProps> = ({
                         Submit your choice
                     </button>
                 )}
-            </div>
+            </div>)} 
         </div>
     );
 };
