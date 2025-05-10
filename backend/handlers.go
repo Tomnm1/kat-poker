@@ -189,6 +189,11 @@ func vote(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	message := fmt.Sprintf("/player-voted:%s", payload.PlayerName)
+	for _, conn := range wsConnections[id] {
+		conn.WriteMessage(websocket.TextMessage, []byte(message))
+	}
+
 	w.Header().Set("Content-Type", "application/json")
 	err = json.NewEncoder(w).Encode(session.CurrentRound)
 	if err != nil {

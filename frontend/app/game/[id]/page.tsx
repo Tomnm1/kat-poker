@@ -1,17 +1,17 @@
 "use client";
 
+import { deleteData } from "@/app/utils/api/delete";
 import { getData, postData } from "@/app/utils/http";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useState } from "react";
 import JoinGameDialog from "../components/JoinGameDialog";
 import PlayersList from "../components/PlayersList";
 import VotingPanel from "../components/VotingPanel";
-import { deleteData } from "@/app/utils/api/delete";
 
 const GamePage = () => {
     const { id } = useParams();
     const router = useRouter();
-    
+
     const searchParams = useSearchParams();
     const isInvite = searchParams.get("invite") === "true";
 
@@ -27,6 +27,8 @@ const GamePage = () => {
     const [usersChoices, setUsersChoices] = useState<{ [username: string]: number }>({});
     const [submitted, setSubmitted] = useState(false);
     const [revealed, setRevealed] = useState(false);
+    const [playerVotes, setPlayerVotes] = useState<{ [username: string]: boolean }>({});
+
     const storyPoints = [1, 2, 3, 5, 8, 13, 20, 40];
 
     useEffect(() => {
@@ -41,7 +43,7 @@ const GamePage = () => {
             setUsername(savedUsername);
             setJoined(true);
         }
-         if (gameId && joined) {
+        if (gameId && joined) {
             fetchGameInfo();
         }
 
@@ -50,24 +52,26 @@ const GamePage = () => {
             setJoined(false);
         }
         const ws = new WebSocket(`ws://localhost:8080/sessions/${id}/ws`);
-        ws.onmessage = (event) => {
-            if (event.data === "/starting") {
+        ws.onmessage = event => {
+            const message = event.data;
+            if (message === "/starting") {
                 setRoundStarted(true);
             }
-            if(event.data=="/player-joined"||event.data=="/player-left"){
+            if (message == "/player-joined" || message == "/player-left") {
                 // Fetch the game info again to update the players list
                 fetchGameInfo();
-
-
+            }
+            if (message.startsWith("/player-voted:")) {
+                const votedPlayer = message.split(":")[1];
+                setPlayerVotes(prev => ({
+                    ...prev,
+                    [votedPlayer]: true,
+                }));
             }
         };
 
-
-
         const round_started = localStorage.getItem("round_started");
         setRoundStarted(round_started === "true");
-
-       
     }, [id, joined, gameId]);
 
     const fetchGameInfo = async () => {
@@ -145,7 +149,11 @@ const GamePage = () => {
                         </span>
                     </h1>
 
-                    <PlayersList players={playersList} />
+                    <PlayersList
+                        players={playersList.map(player =>
+                            playerVotes[player] ? `${player} - Voted` : player,
+                        )}
+                    />
                     <button
                         onClick={copyInviteLink}
                         className="mt-3 px-4 py-2 text-lg font-semibold text-white bg-blue-600 rounded hover:bg-blue-700 transition duration-200"
@@ -174,7 +182,6 @@ const GamePage = () => {
                             revealed={revealed}
                             setRevealed={setRevealed}
                             setError={setError}
-                        
                         />
                     )}
 
