@@ -9,6 +9,7 @@ type Session struct {
 	Name         string   `json:"name"`
 	Players      []string `json:"players"`
 	CurrentRound *Round   `json:"currentRound,omitempty"`
+	RoundHistory []*Round `json:"roundHistory,omitempty"`
 }
 
 type Round struct {
