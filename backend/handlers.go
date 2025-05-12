@@ -8,17 +8,20 @@ import (
 	"strings"
 	"time"
 
-	
 	"github.com/gorilla/mux"
+	"github.com/gorilla/websocket"
 	"github.com/golang-jwt/jwt/v5"
 )
 
 var jwtSecret = []byte("tajny_klucz")
 
-func registerRoutes(r *mux.Router) {
-	r.HandleFunc("/login", loginHandler).Methods("POST") // publiczny
+var upgrader = websocket.Upgrader{
+	CheckOrigin: func(r *http.Request) bool { return true },
+}
 
-	// trasy wymagające autoryzacji JWT
+var wsConnections = make(map[string][]*websocket.Conn)
+
+func registerRoutes(r *mux.Router) {
 	r.HandleFunc("/sessions", JWTMiddleware(createSession)).Methods("POST")
 	r.HandleFunc("/sessions/{id}", JWTMiddleware(getSessionHandler)).Methods("GET")
 	r.HandleFunc("/sessions/{id}/join", JWTMiddleware(joinSession)).Methods("POST")
@@ -28,11 +31,25 @@ func registerRoutes(r *mux.Router) {
 	r.HandleFunc("/sessions/{id}/players/{playerName}", JWTMiddleware(removePlayer)).Methods("DELETE")
 	r.HandleFunc("/sessions/{id}/rollback-vote", JWTMiddleware(rollbackVote)).Methods("POST")
 	r.HandleFunc("/sessions/{id}/round-started", JWTMiddleware(isRoundStarted)).Methods("GET")
+	r.HandleFunc("/sessions/{id}/reveal", JWTMiddleware(revealResults)).Methods("POST")
 
-	// ewentualnie testowa publiczna trasa
+	// Public or unauthenticated routes
 	r.HandleFunc("/test", test).Methods("GET")
+	r.HandleFunc("/sessions/{id}/ws", sessionWebSocket).Methods("GET")
 }
 
+
+func sessionWebSocket(w http.ResponseWriter, r *http.Request) {
+	vars := mux.Vars(r)
+	sessionID := vars["id"]
+	conn, err := upgrader.Upgrade(w, r, nil)
+	if err != nil {
+		http.Error(w, "Failed to upgrade to WebSocket", http.StatusInternalServerError)
+		return
+	}
+
+	wsConnections[sessionID] = append(wsConnections[sessionID], conn)
+}
 
 func createSession(w http.ResponseWriter, r *http.Request) {
 	var session Session
@@ -101,6 +118,9 @@ func joinSession(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Błąd przy aktualizacji sesji", http.StatusInternalServerError)
 		return
 	}
+	for _, conn := range wsConnections[id] {
+		conn.WriteMessage(websocket.TextMessage, []byte("/player-joined"))
+	}
 
 	w.Header().Set("Content-Type", "application/json")
 	err = json.NewEncoder(w).Encode(session)
@@ -126,7 +146,12 @@ func startRound(w http.ResponseWriter, r *http.Request) {
 	}
 	session.CurrentRound = round
 
-	// TODO: Aktualizuj sesję w bazie
+	// Notify all WebSocket connections about the round start
+	for _, conn := range wsConnections[id] {
+		conn.WriteMessage(websocket.TextMessage, []byte("/starting"))
+	}
+
+	// Save the session with the new round
 	if err := saveSession(session); err != nil {
 		http.Error(w, "Błąd przy aktualizacji rundy", http.StatusInternalServerError)
 		return
@@ -172,6 +197,18 @@ func vote(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	message := fmt.Sprintf("/player-voted:%s", payload.PlayerName)
+	for _, conn := range wsConnections[id] {
+		conn.WriteMessage(websocket.TextMessage, []byte(message))
+	}
+
+	if len(session.CurrentRound.Votes) == len(session.Players) {
+		// If all have voted, notify to reveal
+		for _, conn := range wsConnections[id] {
+			conn.WriteMessage(websocket.TextMessage, []byte("/all-voted"))
+		}
+	}
+
 	w.Header().Set("Content-Type", "application/json")
 	err = json.NewEncoder(w).Encode(session.CurrentRound)
 	if err != nil {
@@ -201,6 +238,29 @@ func getResults(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Wystąpił błąd", http.StatusInternalServerError)
 		return
 	}
+}
+func revealResults(w http.ResponseWriter, r *http.Request) {
+	vars := mux.Vars(r)
+	id := vars["id"]
+
+	session, err := getSession(id)
+	if err != nil {
+		http.Error(w, "Sesja nie znaleziona", http.StatusNotFound)
+		return
+	}
+
+	// Notify all players to reveal choices
+	for _, conn := range wsConnections[id] {
+		conn.WriteMessage(websocket.TextMessage, []byte("/reveals"))
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	err = json.NewEncoder(w).Encode(session.CurrentRound)
+	if err != nil {
+		http.Error(w, "Wystąpił błąd", http.StatusInternalServerError)
+		return
+	}
+
 }
 
 func removePlayer(w http.ResponseWriter, r *http.Request) {
@@ -234,6 +294,11 @@ func removePlayer(w http.ResponseWriter, r *http.Request) {
 	if err := saveSession(session); err != nil {
 		http.Error(w, "Błąd przy aktualizacji sesji", http.StatusInternalServerError)
 		return
+	}
+
+	// Notify all WebSocket connections about the player removal
+	for _, conn := range wsConnections[sessionID] {
+		conn.WriteMessage(websocket.TextMessage, []byte("/player-left"))
 	}
 
 	w.Header().Set("Content-Type", "application/json")
@@ -392,9 +457,6 @@ func loginHandler(w http.ResponseWriter, r *http.Request) {
 		"token": token,
 	})
 }
-
-
-
 
 func test(w http.ResponseWriter, r *http.Request) {
 	err := json.NewEncoder(w).Encode("test")
