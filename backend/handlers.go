@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"time"
 
 	"github.com/gorilla/mux"
 	"github.com/gorilla/websocket"
@@ -30,7 +31,9 @@ func registerRoutes(r *mux.Router) {
 	r.HandleFunc("/sessions/{id}/reveal", revealResults).Methods("POST")
 	r.HandleFunc("/sessions/{id}/ws", sessionWebSocket).Methods("GET")
 	r.HandleFunc("/sessions/{id}/rounds/{roundId}", getRoundDetails).Methods("GET")
-
+	r.HandleFunc("/sessions/{id}/stories", addStoryHandler).Methods("POST")
+	r.HandleFunc("/sessions/{id}/stories/{index}", deleteStoryHandler).Methods("DELETE")
+	r.HandleFunc("/sessions/{id}/stories/{index}", addStoryTaskHandler).Methods("POST")
 }
 
 func getRoundDetails(w http.ResponseWriter, r *http.Request) {
@@ -130,11 +133,9 @@ func createSession(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Nieprawidłowe dane", http.StatusBadRequest)
 		return
 	}
-	session.ID = fmt.Sprintf("session-%d", len(sessions)+1)
 	session.Players = []string{}
-	sessions[session.ID] = &session
+	session.ID = fmt.Sprintf("session-%d", time.Now().UnixNano())
 
-	// TODO: Zapis sesji do bazy
 	if err := saveSession(&session); err != nil {
 		http.Error(w, "Błąd przy zapisie sesji", http.StatusInternalServerError)
 		return
@@ -186,7 +187,6 @@ func joinSession(w http.ResponseWriter, r *http.Request) {
 
 	session.Players = append(session.Players, payload.PlayerName)
 
-	// TODO: Aktualizuj sesję w bazie
 	if err := saveSession(session); err != nil {
 		http.Error(w, "Błąd przy aktualizacji sesji", http.StatusInternalServerError)
 		return
@@ -277,7 +277,6 @@ func vote(w http.ResponseWriter, r *http.Request) {
 
 	session.CurrentRound.Votes[payload.PlayerName] = payload.Vote
 
-	// TODO: Aktualizuj sesję w bazie
 	if err := saveSession(session); err != nil {
 		http.Error(w, "Błąd przy aktualizacji głosów", http.StatusInternalServerError)
 		return
@@ -461,6 +460,135 @@ func isRoundStarted(w http.ResponseWriter, r *http.Request) {
 
 func test(w http.ResponseWriter, r *http.Request) {
 	err := json.NewEncoder(w).Encode("test")
+	if err != nil {
+		http.Error(w, "Wystąpił błąd", http.StatusInternalServerError)
+		return
+	}
+}
+
+func addStoryHandler(w http.ResponseWriter, r *http.Request) {
+	vars := mux.Vars(r)
+	sessionID := vars["id"]
+
+	var payload struct {
+		Story string `json:"story"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
+		http.Error(w, "Błędne dane", http.StatusBadRequest)
+		return
+	}
+
+	session, err := getSession(sessionID)
+	if err != nil {
+		http.Error(w, "Sesja nie znaleziona", http.StatusNotFound)
+		return
+	}
+	session.User_stories = append(session.User_stories, payload.Story)
+	if err := saveSession(session); err != nil {
+		http.Error(w, "Błąd przy dodawaniu user story", http.StatusInternalServerError)
+		return
+	}
+
+	message := fmt.Sprintf("/userstory-added:%s", payload.Story)
+	for _, conn := range wsConnections[sessionID] {
+		conn.WriteMessage(websocket.TextMessage, []byte(message))
+	}
+
+	notifySessionParticipants(sessionID, "/story-added")
+	w.Header().Set("Content-Type", "application/json")
+	err = json.NewEncoder(w).Encode(session.CurrentRound)
+	if err != nil {
+		http.Error(w, "Wystąpił błąd", http.StatusInternalServerError)
+		return
+	}
+}
+
+func deleteStoryHandler(w http.ResponseWriter, r *http.Request) {
+	vars := mux.Vars(r)
+	sessionID := vars["id"]
+	indexStr := vars["index"]
+
+	var index int
+	_, err := fmt.Sscanf(indexStr, "%d", &index)
+	if err != nil {
+		http.Error(w, "Invalid index", http.StatusBadRequest)
+		return
+	}
+
+	session, err := getSession(sessionID)
+	if err != nil {
+		http.Error(w, "Sesja nie znaleziona", http.StatusNotFound)
+		return
+	}
+	if index < 0 || index >= len(session.User_stories) {
+		http.Error(w, "invalid story index", http.StatusNotFound)
+		return
+	}
+	session.User_stories = append(session.User_stories[:index], session.User_stories[index+1:]...)
+	delete(session.Tasks, index)
+	if err := saveSession(session); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	message := fmt.Sprintf("/userstory-removed:%s", indexStr)
+	for _, conn := range wsConnections[sessionID] {
+		conn.WriteMessage(websocket.TextMessage, []byte(message))
+	}
+
+	notifySessionParticipants(sessionID, "/story-removed")
+	w.Header().Set("Content-Type", "application/json")
+	err = json.NewEncoder(w).Encode(session.CurrentRound)
+	if err != nil {
+		http.Error(w, "Wystąpił błąd", http.StatusInternalServerError)
+		return
+	}
+}
+
+func addStoryTaskHandler(w http.ResponseWriter, r *http.Request) {
+	vars := mux.Vars(r)
+	sessionID := vars["id"]
+	indexStr := vars["index"]
+
+	var index int
+	_, err := fmt.Sscanf(indexStr, "%d", &index)
+	if err != nil {
+		http.Error(w, "Invalid index", http.StatusBadRequest)
+		return
+	}
+
+	session, err := getSession(sessionID)
+	if err != nil {
+		http.Error(w, "Sesja nie znaleziona", http.StatusNotFound)
+		return
+	}
+
+	var payload struct {
+		Task string `json:"task"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
+		http.Error(w, "Błędne dane gracza", http.StatusBadRequest)
+		return
+	}
+
+	if index < 0 || index >= len(session.User_stories) {
+		http.Error(w, "invalid story index", http.StatusNotFound)
+		return
+	}
+
+	if session.Tasks == nil {
+		session.Tasks = make(map[int]string)
+	}
+	session.Tasks[index] = payload.Task
+
+	message := fmt.Sprintf("/task-added:%s", indexStr)
+	for _, conn := range wsConnections[sessionID] {
+		conn.WriteMessage(websocket.TextMessage, []byte(message))
+	}
+
+	notifySessionParticipants(sessionID, "/task-added")
+	w.Header().Set("Content-Type", "application/json")
+	err = json.NewEncoder(w).Encode(session.Tasks)
 	if err != nil {
 		http.Error(w, "Wystąpił błąd", http.StatusInternalServerError)
 		return

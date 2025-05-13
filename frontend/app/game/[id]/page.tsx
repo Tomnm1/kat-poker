@@ -23,6 +23,8 @@ interface Round {
 interface Session {
   id: string;
   name: string;
+  user_stories: string[];
+  tasks: Record<number, string>,
   players: string[];
   currentRound?: Round;
   roundHistory?: Round[];
@@ -57,6 +59,11 @@ const GamePage = () => {
     const [showSummary, setShowSummary] = useState<boolean>(false);
 
     const storyPoints = [1, 2, 3, 5, 8, 13, 20, 40];
+
+    const [newStory, setNewStory] = useState<string>("");
+    const [activeTaskIndex, setActiveTaskIndex] = useState<number | null>(null);
+    const [tasksState, setTasksState] = useState<{ [idx: number]: string[] }>({});
+    const [taskInput, setTaskInput] = useState<string>("");
 
     useEffect(() => {
         if (id) {
@@ -133,6 +140,21 @@ const GamePage = () => {
                     console.log("Revealing votes");
                     setRevealed(true);
                     fetchGameInfo();
+                }
+                
+                if (message === "/story-added") {
+                    console.log("Adding user-story");
+                    fetchGameInfo();
+                }
+
+                if (message === "/story-removed") {
+                  console.log("Removing user-story");
+                  fetchGameInfo();
+                }
+
+                if (message === "/task-added") {
+                  console.log("Adding a user-story task");
+                  fetchGameInfo();
                 }
             };
         }
@@ -274,6 +296,46 @@ const GamePage = () => {
       } catch (error: any) {
         console.error("Failed to start new round:", error);
         setError(error.message || "Something went wrong when trying to start a new round.");
+      }
+    };
+
+    const handleAddStory = async () => {
+      if (!gameId || !newStory.trim()) return;
+      try {
+        await postData(`/sessions/${gameId}/stories`, { story: newStory.trim() });
+        setNewStory("");
+        fetchGameInfo();
+      } catch (err: any) {
+        setError(err.message || "Failed to add story");
+      }
+    };
+
+    const handleDeleteStory = async (index: number) => {
+      if (!gameId) return;
+      try {
+        await deleteData(`/sessions/${gameId}/stories/${index}`);
+        fetchGameInfo();
+      } catch (err: any) {
+        setError(err.message || "Failed to delete story");
+      }
+    };
+
+    const handleAddTask = async (index: number) => {
+      if (!gameId || !taskInput.trim()) return;
+      try {
+        var response = await postData(`/sessions/${gameId}/stories/${index}`, { task: taskInput.trim() });
+        setTaskInput("");
+        const entries = Object.entries(response);
+        const [keyStr, valueRaw] = entries[0];
+        const key = Number(keyStr);
+        const value = valueRaw as string;
+        setTasksState(prev => ({
+          ...prev,
+          [key]: [...(prev[key] || []), value]
+        }));
+        fetchGameInfo();
+      } catch (err: any) {
+        setError(err.message || "Failed to add a task");
       }
     };
 
@@ -433,6 +495,86 @@ return (
                     )}
                   </>
                 )}
+              </div>
+              <div className="bg-gray-800 rounded-lg p-4 shadow-lg mb-6 mt-6">
+                <h3   className="text-xl font-bold text-white mb-4">User Stories</h3>
+                <ul className="mb-4">
+                  {session?.user_stories?.map((story, idx) => (
+                    <li key={idx} className="text-white mb-3">
+                      <div className="flex justify-between items-center">
+                        <span>{story}</span>
+                        <div className="flex gap-2">
+                          <button
+                            className="text-blue-500 hover:underline"
+                            onClick={() => {
+                              setActiveTaskIndex(idx);
+                              setTaskInput("");
+                            }}
+                          >
+                            Add task
+                          </button>
+                          <button
+                            className="text-red-500 hover:underline"
+                            onClick={() => handleDeleteStory(idx)}
+                          >
+                            Delete
+                          </button>
+                        </div>
+                      </div>
+
+                      {tasksState[idx] && tasksState[idx].length > 0 && (
+                        <ul className="mt-2 ml-2 pl-2 border-l-4 border-green-500 text-sm text-green-300 list-disc list-inside">
+                          {tasksState[idx].map((task, taskIdx) => (
+                            <li key={taskIdx}>{task}</li>
+                          ))}
+                        </ul>
+                      )}
+
+                      {activeTaskIndex === idx && (
+                        <div className="mt-2 flex gap-2">
+                          <input
+                            type="text"
+                            value={taskInput}
+                            onChange={(e) => setTaskInput(e.target.value)}
+                            placeholder="Enter task"
+                            className="flex-grow px-2 py-1 rounded bg-gray-700 text-white border border-gray-600"
+                          />
+                          <button
+                            onClick={async () => {
+                              await handleAddTask(idx);
+                              setActiveTaskIndex(null);
+                            }}
+                            className="px-3 py-1 bg-green-600 text-white rounded hover:bg-green-700"
+                          >
+                            Submit
+                          </button>
+                          <button
+                            onClick={() => setActiveTaskIndex(null)}
+                            className="px-3 py-1 bg-gray-600 text-white rounded hover:bg-gray-700"
+                          >
+                            Cancel
+                          </button>
+                        </div>
+                      )}
+                    </li>
+                  ))}
+                </ul>
+
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    value={newStory}
+                    onChange={(e) => setNewStory(e.target.value)}
+                    placeholder="Add new story"
+                    className="flex-grow px-2 py-1 rounded bg-gray-700 text-white border border-gray-600"
+                  />
+                  <button
+                    onClick={handleAddStory}
+                    className="px-3 py-1 bg-blue-600 text-white rounded hover:bg-blue-700"
+                  >
+                    Add
+                  </button>
+                </div>
               </div>
             </div>
           </div>

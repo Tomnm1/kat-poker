@@ -8,6 +8,11 @@ require (
 )
 
 require (
+	github.com/montanaflynn/stats v0.7.1 // indirect
+	go.mongodb.org/mongo-driver v1.17.3 // indirect
+)
+
+require (
 	github.com/golang/snappy v0.0.4 // indirect
 	github.com/gorilla/websocket v1.5.3
 	github.com/klauspost/compress v1.16.7 // indirect
