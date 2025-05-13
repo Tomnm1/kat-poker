@@ -9,11 +9,13 @@ import (
 )
 
 type Session struct {
-	ID           string   `json:"id"`
-	Name         string   `json:"name"`
-	Players      []string `json:"players"`
-	CurrentRound *Round   `json:"currentRound,omitempty"`
-	RoundHistory []*Round `json:"roundHistory,omitempty"`
+	ID           string          `json:"id"`
+	Name         string          `json:"name"`
+	User_stories []string        `json:"user_stories"`
+	Tasks        map[int]string  `json:"tasks"`
+	Players      []string        `json:"players"`
+	CurrentRound *Round          `json:"currentRound,omitempty"`
+	RoundHistory []*Round        `json:"roundHistory,omitempty"`
 }
 
 type Round struct {
