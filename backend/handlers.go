@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"log"
 	"net/http"
 
 	"github.com/gorilla/mux"
@@ -28,7 +29,64 @@ func registerRoutes(r *mux.Router) {
 	r.HandleFunc("/sessions/{id}/round-started", isRoundStarted).Methods("GET")
 	r.HandleFunc("/sessions/{id}/reveal", revealResults).Methods("POST")
 	r.HandleFunc("/sessions/{id}/ws", sessionWebSocket).Methods("GET")
+	r.HandleFunc("/sessions/{id}/rounds/{roundId}", getRoundDetails).Methods("GET")
 
+}
+
+func getRoundDetails(w http.ResponseWriter, r *http.Request) {
+	vars := mux.Vars(r)
+	sessionID := vars["id"]
+	roundID := vars["roundId"]
+
+	session, err := getSession(sessionID)
+	if err != nil {
+		http.Error(w, "Sesja nie znaleziona", http.StatusNotFound)
+		return
+	}
+
+	if session.CurrentRound != nil && session.CurrentRound.ID == roundID {
+		w.Header().Set("Content-Type", "application/json")
+		err = json.NewEncoder(w).Encode(session.CurrentRound)
+		if err != nil {
+			http.Error(w, "Wystąpił błąd", http.StatusInternalServerError)
+		}
+		return
+	}
+
+	if session.RoundHistory != nil {
+		for _, round := range session.RoundHistory {
+			if round.ID == roundID {
+				w.Header().Set("Content-Type", "application/json")
+				err = json.NewEncoder(w).Encode(round)
+				if err != nil {
+					http.Error(w, "Wystąpił błąd", http.StatusInternalServerError)
+				}
+				return
+			}
+		}
+	}
+
+	http.Error(w, "Runda nie znaleziona", http.StatusNotFound)
+}
+
+func notifySessionParticipants(sessionID, message string) {
+	var connectionsToKeep []*websocket.Conn
+
+	log.Printf("Notifying session %s participants: %s", sessionID, message)
+
+	for _, conn := range wsConnections[sessionID] {
+		err := conn.WriteMessage(websocket.TextMessage, []byte(message))
+		if err != nil {
+			log.Printf("Error sending WebSocket message: %v", err)
+			conn.Close()
+		} else {
+			connectionsToKeep = append(connectionsToKeep, conn)
+		}
+	}
+
+	wsConnections[sessionID] = connectionsToKeep
+
+	log.Printf("Notification sent to %d connections", len(connectionsToKeep))
 }
 
 func sessionWebSocket(w http.ResponseWriter, r *http.Request) {
@@ -41,6 +99,29 @@ func sessionWebSocket(w http.ResponseWriter, r *http.Request) {
 	}
 
 	wsConnections[sessionID] = append(wsConnections[sessionID], conn)
+
+	go func() {
+		for {
+			_, _, err := conn.ReadMessage()
+			if err != nil {
+				removeConnection(sessionID, conn)
+				break
+			}
+		}
+	}()
+}
+
+func removeConnection(sessionID string, conn *websocket.Conn) {
+	connections := wsConnections[sessionID]
+	for i, c := range connections {
+		if c == conn {
+			wsConnections[sessionID] = append(connections[:i], connections[i+1:]...)
+			break
+		}
+	}
+	if len(wsConnections[sessionID]) == 0 {
+		delete(wsConnections, sessionID)
+	}
 }
 
 func createSession(w http.ResponseWriter, r *http.Request) {
@@ -120,6 +201,7 @@ func joinSession(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Wystąpił błąd", http.StatusInternalServerError)
 		return
 	}
+
 }
 
 func startRound(w http.ResponseWriter, r *http.Request) {
@@ -132,16 +214,28 @@ func startRound(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	roundNumber := 1
+	if session.CurrentRound != nil {
+		_, err := fmt.Sscanf(session.CurrentRound.ID, "round-%d", &roundNumber)
+		if err == nil {
+			roundNumber++
+		}
+	}
+
+	if session.CurrentRound != nil {
+		if session.RoundHistory == nil {
+			session.RoundHistory = []*Round{}
+		}
+		session.RoundHistory = append(session.RoundHistory, session.CurrentRound)
+	}
+
 	round := &Round{
-		ID:    fmt.Sprintf("round-%d", 1),
+		ID:    fmt.Sprintf("round-%d", roundNumber),
 		Votes: make(map[string]int),
 	}
 	session.CurrentRound = round
 
-	// Notify all WebSocket connections about the round start
-	for _, conn := range wsConnections[id] {
-		conn.WriteMessage(websocket.TextMessage, []byte("/starting"))
-	}
+	notifySessionParticipants(id, "/starting")
 
 	// Save the session with the new round
 	if err := saveSession(session); err != nil {
@@ -288,17 +382,12 @@ func removePlayer(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Notify all WebSocket connections about the player removal
 	for _, conn := range wsConnections[sessionID] {
 		conn.WriteMessage(websocket.TextMessage, []byte("/player-left"))
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	err = json.NewEncoder(w).Encode(session.CurrentRound)
-	if err != nil {
-		http.Error(w, "Wystąpił błąd", http.StatusInternalServerError)
-		return
-	}
+	w.WriteHeader(http.StatusNoContent)
+	return
 }
 
 func rollbackVote(w http.ResponseWriter, r *http.Request) {

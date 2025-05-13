@@ -1,26 +1,28 @@
-"use client";
+import React from 'react';
 
 interface PlayersListProps {
-    players: string[];
+  players: string[];
 }
 
 const PlayersList: React.FC<PlayersListProps> = ({ players }) => {
-    return (
-        <div className="absolute top-4 right-4 bg-white/20 p-4 rounded shadow-4xl max-w-xs">
-            <h3 className="text-lg font-semibold text-white-500">Players List</h3>
-            <ul className="mt-2">
-                {players.length > 0 ? (
-                    players.map((player, index) => (
-                        <li key={index} className="text-gray-400">
-                            {player}
-                        </li>
-                    ))
-                ) : (
-                    <li className="text-gray-600">No players yet.</li>
-                )}
-            </ul>
-        </div>
-    );
+  return (
+    <div className="overflow-y-auto max-h-80">
+      {players.length === 0 ? (
+        <p className="text-gray-400 text-center italic">No players yet</p>
+      ) : (
+        <ul className="space-y-2">
+          {players.map((player, index) => (
+            <li 
+              key={index} 
+              className="p-2 bg-gray-700 rounded-md text-white break-words"
+            >
+              {player}
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
 };
 
 export default PlayersList;
