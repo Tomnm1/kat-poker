@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"time"
 
 	"github.com/gorilla/mux"
 	"github.com/gorilla/websocket"
@@ -130,11 +131,9 @@ func createSession(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Nieprawidłowe dane", http.StatusBadRequest)
 		return
 	}
-	session.ID = fmt.Sprintf("session-%d", len(sessions)+1)
 	session.Players = []string{}
-	sessions[session.ID] = &session
+	session.ID = fmt.Sprintf("session-%d", time.Now().UnixNano())
 
-	// TODO: Zapis sesji do bazy
 	if err := saveSession(&session); err != nil {
 		http.Error(w, "Błąd przy zapisie sesji", http.StatusInternalServerError)
 		return
@@ -186,7 +185,6 @@ func joinSession(w http.ResponseWriter, r *http.Request) {
 
 	session.Players = append(session.Players, payload.PlayerName)
 
-	// TODO: Aktualizuj sesję w bazie
 	if err := saveSession(session); err != nil {
 		http.Error(w, "Błąd przy aktualizacji sesji", http.StatusInternalServerError)
 		return
@@ -277,7 +275,6 @@ func vote(w http.ResponseWriter, r *http.Request) {
 
 	session.CurrentRound.Votes[payload.PlayerName] = payload.Vote
 
-	// TODO: Aktualizuj sesję w bazie
 	if err := saveSession(session); err != nil {
 		http.Error(w, "Błąd przy aktualizacji głosów", http.StatusInternalServerError)
 		return

@@ -9,6 +9,7 @@ import (
 )
 
 func main() {
+	initMongoDB()
 	// Set up CORS options
 	corsOptions := cors.New(cors.Options{
 		AllowedOrigins:   []string{"http://localhost:3000"},
