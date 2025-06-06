@@ -9,6 +9,10 @@ import (
 
 	"github.com/gorilla/mux"
 	"github.com/gorilla/websocket"
+
+	"crypto/sha256"
+	"encoding/hex"
+	"github.com/google/uuid"
 )
 
 var upgrader = websocket.Upgrader{
@@ -34,6 +38,91 @@ func registerRoutes(r *mux.Router) {
 	r.HandleFunc("/sessions/{id}/stories", addStoryHandler).Methods("POST")
 	r.HandleFunc("/sessions/{id}/stories/{index}", deleteStoryHandler).Methods("DELETE")
 	r.HandleFunc("/sessions/{id}/stories/{index}", addStoryTaskHandler).Methods("POST")
+	r.HandleFunc("/register", registerHandler).Methods("POST")
+	r.HandleFunc("/login", loginHandler).Methods("POST")
+
+}
+func registerHandler(w http.ResponseWriter, r *http.Request) {
+	var payload struct {
+		Username string `json:"username"`
+		Password string `json:"password"`
+	}
+
+	if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
+		http.Error(w, "Nieprawidłowe dane wejściowe", http.StatusBadRequest)
+		return
+	}
+
+	if payload.Username == "" || payload.Password == "" {
+		http.Error(w, "Nazwa użytkownika i hasło są wymagane", http.StatusBadRequest)
+		return
+	}
+
+	user := &User{
+		ID:       uuid.New().String(),
+		Username: payload.Username,
+		Password: payload.Password,
+	}
+
+	if err := saveUser(user); err != nil {
+		if err.Error() == "użytkownik już istnieje" {
+			http.Error(w, "Użytkownik już istnieje", http.StatusConflict)
+		} else {
+			http.Error(w, "Błąd podczas zapisywania użytkownika", http.StatusInternalServerError)
+		}
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(struct {
+		ID       string `json:"id"`
+		Username string `json:"username"`
+	}{
+		ID:       user.ID,
+		Username: user.Username,
+	})
+}
+
+func loginHandler(w http.ResponseWriter, r *http.Request) {
+	var payload struct {
+		Username string `json:"username"`
+		Password string `json:"password"`
+	}
+
+	if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
+		http.Error(w, "Nieprawidłowe dane wejściowe", http.StatusBadRequest)
+		return
+	}
+
+	if payload.Username == "" || payload.Password == "" {
+		http.Error(w, "Nazwa użytkownika i hasło są wymagane", http.StatusBadRequest)
+		return
+	}
+
+	user, err := getUserByUsername(payload.Username)
+	if err != nil {
+		http.Error(w, "Użytkownik nie znaleziony", http.StatusNotFound)
+		return
+	}
+
+	if !checkPassword(user.Password, payload.Password) {
+		http.Error(w, "Błędne hasło", http.StatusUnauthorized)
+		return
+	}
+
+	w.WriteHeader(http.StatusOK)
+	w.Write([]byte("OK"))
+}
+
+
+func hashPassword(password string) string {
+	hash := sha256.Sum256([]byte(password))
+	return hex.EncodeToString(hash[:])
+}
+
+func checkPassword(storedPassword, inputPassword string) bool {
+	hash := sha256.Sum256([]byte(inputPassword))
+	return storedPassword == hex.EncodeToString(hash[:])
 }
 
 func getRoundDetails(w http.ResponseWriter, r *http.Request) {
