@@ -19,7 +19,11 @@ func initMongoDB() {
 	defer cancel()
 
 	var err error
-	clientOptions := options.Client().ApplyURI("mongodb://mongo:mongo@localhost:27017")
+	mongoURI := os.Getenv("MONGO_URI")
+	if mongoURI == "" {
+		mongoURI = "mongodb://mongo:mongo@localhost:27017"
+	}
+	clientOptions := options.Client().ApplyURI(mongoURI)
 	client, err = mongo.Connect(ctx, clientOptions)
 	if err != nil {
 		log.Fatalf("MongoDB connection error: %v", err)
