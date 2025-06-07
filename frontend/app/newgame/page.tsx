@@ -14,7 +14,13 @@ export default function SecondPage() {
 
     //remove user data from local storage when the component mounts
     useEffect(() => {
-        localStorage.removeItem("username");
+     
+        const token = localStorage.getItem("token");
+
+        if (!token) {
+            localStorage.removeItem("username");
+        }
+       
     }, []);
     const handleSubmit = async () => {
         if (!gameName) {

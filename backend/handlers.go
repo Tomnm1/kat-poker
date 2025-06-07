@@ -165,7 +165,7 @@ func logoutHandler(w http.ResponseWriter, r *http.Request) {
 
 
 	w.WriteHeader(http.StatusOK)
-	w.Write([]byte("Wylogowanie zakończone sukcesem"))
+	
 	log.Printf("Użytkownik %s został wylogowany.", user.Username)
 }
 
@@ -231,7 +231,12 @@ func loginHandler(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK) 
 
 
-	_, err = w.Write([]byte(token)) 
+	response := struct {
+    Token string `json:"token"`
+}{
+    Token: token,
+}
+err = json.NewEncoder(w).Encode(response)
 	if err != nil {
 		http.Error(w, "Błąd przy wysyłaniu odpowiedzi", http.StatusInternalServerError)
 		log.Printf("Błąd przy wysyłaniu odpowiedzi: %v", err)
@@ -252,20 +257,19 @@ func checkPassword(storedPassword, inputPassword string) bool {
 	return storedPassword == hex.EncodeToString(hash[:])
 }
 
-var jwtSecret = []byte("yourSecretKey") // Tajny klucz do podpisywania tokenów
+var jwtSecret = []byte("yourSecretKey") 
 
 func generateJWT(userID, username string) (string, error) {
-	// Tworzenie roli i claims (informacji o użytkowniku)
+
 	claims := jwt.MapClaims{
 		"sub":      userID,
 		"username": username,
-		"exp":      time.Now().Add(time.Hour * 24).Unix(), // Token ważny przez 24 godziny
+		"exp":      time.Now().Add(time.Hour * 24).Unix(), 
 	}
 
-	// Tworzenie tokenu
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
 
-	// Podpisanie tokenu z użyciem sekretu
+
 	signedToken, err := token.SignedString(jwtSecret)
 	if err != nil {
 		return "", err
