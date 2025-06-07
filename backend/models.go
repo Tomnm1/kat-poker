@@ -6,6 +6,7 @@ import (
 	"time"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo/options"
+	
 )
 
 type Session struct {
@@ -23,9 +24,11 @@ type Round struct {
 	Votes map[string]int `json:"votes"`
 }
 type User struct {
-	ID       string `json:"id"`
-	Username string `json:"username"`
-	Password string `json:"password"`
+	ID        string `json:"id"`
+	Username  string `json:"username"`
+	Password  string `json:"password"`
+	Token     string `json:"token,omitempty"`    
+	TokenTime int64  `json:"token_time,omitempty"` 
 }
 
 
@@ -76,6 +79,42 @@ func getUserByUsername(username string) (*User, error) {
 	err := userCol.FindOne(ctx, bson.M{"username": username}).Decode(&user)
 	if err != nil {
 		return nil, fmt.Errorf("użytkownik nie znaleziony: %w", err)
+	}
+	return &user, nil
+}
+
+
+func updateUser(user *User) error {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+
+	_, err := userCol.UpdateOne(
+		ctx,
+		bson.M{"username": user.Username}, 
+		bson.M{
+			"$set": bson.M{
+				"token":      user.Token,
+				"token_time": user.TokenTime,
+			},
+		},
+	)
+
+	if err != nil {
+		return fmt.Errorf("błąd podczas aktualizacji użytkownika: %w", err)
+	}
+
+	return nil
+}
+func getUserByID(userID string) (*User, error) {
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	var user User
+	err := userCol.FindOne(ctx, bson.M{"id": userID}).Decode(&user)
+	if err != nil {
+		return nil, fmt.Errorf("błąd przy pobieraniu użytkownika: %w", err)
 	}
 	return &user, nil
 }
