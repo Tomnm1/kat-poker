@@ -9,6 +9,12 @@ import (
 
 	"github.com/gorilla/mux"
 	"github.com/gorilla/websocket"
+
+	"crypto/sha256"
+	"encoding/hex"
+
+	"github.com/dgrijalva/jwt-go"
+	"github.com/google/uuid"
 )
 
 var upgrader = websocket.Upgrader{
@@ -34,6 +40,242 @@ func registerRoutes(r *mux.Router) {
 	r.HandleFunc("/sessions/{id}/stories", addStoryHandler).Methods("POST")
 	r.HandleFunc("/sessions/{id}/stories/{index}", deleteStoryHandler).Methods("DELETE")
 	r.HandleFunc("/sessions/{id}/stories/{index}", addStoryTaskHandler).Methods("POST")
+	r.HandleFunc("/register", registerHandler).Methods("POST")
+	r.HandleFunc("/login", loginHandler).Methods("POST")
+	r.HandleFunc("/logout", logoutHandler).Methods("POST")
+
+}
+func registerHandler(w http.ResponseWriter, r *http.Request) {
+	var payload struct {
+		Username string `json:"username"`
+		Password string `json:"password"`
+	}
+
+	if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
+		http.Error(w, "Nieprawidłowe dane wejściowe", http.StatusBadRequest)
+		return
+	}
+
+	if payload.Username == "" || payload.Password == "" {
+		http.Error(w, "Nazwa użytkownika i hasło są wymagane", http.StatusBadRequest)
+		return
+	}
+
+	user := &User{
+		ID:       uuid.New().String(),
+		Username: payload.Username,
+		Password: payload.Password,
+	}
+
+	if err := saveUser(user); err != nil {
+		if err.Error() == "użytkownik już istnieje" {
+			http.Error(w, "Użytkownik już istnieje", http.StatusConflict)
+		} else {
+			http.Error(w, "Błąd podczas zapisywania użytkownika", http.StatusInternalServerError)
+		}
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(struct {
+		ID       string `json:"id"`
+		Username string `json:"username"`
+	}{
+		ID:       user.ID,
+		Username: user.Username,
+	})
+}
+func parseJWT(tokenString string) (jwt.MapClaims, error) {
+
+	token, err := jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {
+
+		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
+			return nil, fmt.Errorf("niepoprawna metoda podpisu")
+		}
+		return jwtSecret, nil
+	})
+
+	if err != nil {
+		return nil, err
+	}
+
+
+	if claims, ok := token.Claims.(jwt.MapClaims); ok && token.Valid {
+
+		expirationTime := int64(claims["exp"].(float64)) 
+
+	
+		if time.Now().Unix() > expirationTime {
+			return nil, fmt.Errorf("token wygasł")
+		}
+
+		return claims, nil
+	}
+
+
+	return nil, fmt.Errorf("nieprawidłowy token")
+}
+func logoutHandler(w http.ResponseWriter, r *http.Request) {
+
+	authHeader := r.Header.Get("Authorization")
+	if authHeader == "" {
+		http.Error(w, "Brak tokenu w nagłówku", http.StatusUnauthorized)
+		return
+	}
+
+	tokenString := authHeader[len("Bearer "):]
+
+	claims, err := parseJWT(tokenString) 
+	if err != nil {
+		if err.Error() == "token wygasł" {
+			http.Error(w, "Token wygasł", http.StatusUnauthorized)
+		} else {
+			http.Error(w, "Błąd weryfikacji tokenu", http.StatusUnauthorized)
+		}
+		log.Printf("Błąd weryfikacji tokenu: %v", err)
+		return
+	}
+
+
+	userID := claims["sub"].(string)
+
+
+	user, err := getUserByID(userID)
+	if err != nil {
+		http.Error(w, "Użytkownik nie znaleziony", http.StatusNotFound)
+		log.Printf("Błąd przy pobieraniu użytkownika: %v", err)
+		return
+	}
+
+	if user.Token == "" {
+		http.Error(w, "Użytkownik nie jest zalogowany", http.StatusBadRequest)
+		return
+	}
+
+	user.Token = "" 
+	user.TokenTime = 0 
+
+
+	err = updateUser(user) 
+	if err != nil {
+		http.Error(w, "Błąd przy aktualizacji tokenu", http.StatusInternalServerError)
+		log.Printf("Błąd przy aktualizacji tokenu: %v", err)
+		return
+	}
+
+
+	w.WriteHeader(http.StatusOK)
+	
+	log.Printf("Użytkownik %s został wylogowany.", user.Username)
+}
+
+
+func loginHandler(w http.ResponseWriter, r *http.Request) {
+	var payload struct {
+		Username string `json:"username"`
+		Password string `json:"password"`
+	}
+
+
+	if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
+		http.Error(w, "Nieprawidłowe dane wejściowe", http.StatusBadRequest)
+		log.Printf("Błąd przy dekodowaniu danych wejściowych: %v", err)
+		return
+	}
+
+
+	if payload.Username == "" || payload.Password == "" {
+		http.Error(w, "Nazwa użytkownika i hasło są wymagane", http.StatusBadRequest)
+		return
+	}
+
+
+	user, err := getUserByUsername(payload.Username)
+	if err != nil {
+		http.Error(w, "Użytkownik nie znaleziony", http.StatusNotFound)
+		log.Printf("Błąd przy pobieraniu użytkownika: %v", err)
+		return
+	}
+
+
+	if !checkPassword(user.Password, payload.Password) {
+		http.Error(w, "Błędne hasło", http.StatusUnauthorized)
+		return
+	}
+
+
+	token, err := generateJWT(user.ID, user.Username)
+	if err != nil {
+		http.Error(w, "Błąd podczas generowania tokenu", http.StatusInternalServerError)
+		log.Printf("Błąd przy generowaniu JWT: %v", err)
+		return
+	}
+
+
+	user.Token = token
+	user.TokenTime = time.Now().Unix()
+
+
+	err = updateUser(user) 
+	if err != nil {
+		http.Error(w, "Błąd przy zapisie tokenu", http.StatusInternalServerError)
+		log.Printf("Błąd przy zapisie tokenu: %v", err)
+		return
+	}
+
+
+	log.Println("Wysyłam token do użytkownika:", token)
+
+
+	w.Header().Set("Content-Type", "text/plain")
+	w.WriteHeader(http.StatusOK) 
+
+
+	response := struct {
+    Token string `json:"token"`
+}{
+    Token: token,
+}
+err = json.NewEncoder(w).Encode(response)
+	if err != nil {
+		http.Error(w, "Błąd przy wysyłaniu odpowiedzi", http.StatusInternalServerError)
+		log.Printf("Błąd przy wysyłaniu odpowiedzi: %v", err)
+		return
+	}
+
+	log.Println("Zakończono odpowiedź z tokenem")
+}
+
+
+func hashPassword(password string) string {
+	hash := sha256.Sum256([]byte(password))
+	return hex.EncodeToString(hash[:])
+}
+
+func checkPassword(storedPassword, inputPassword string) bool {
+	hash := sha256.Sum256([]byte(inputPassword))
+	return storedPassword == hex.EncodeToString(hash[:])
+}
+
+var jwtSecret = []byte("yourSecretKey") 
+
+func generateJWT(userID, username string) (string, error) {
+
+	claims := jwt.MapClaims{
+		"sub":      userID,
+		"username": username,
+		"exp":      time.Now().Add(time.Hour * 24).Unix(), 
+	}
+
+	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
+
+
+	signedToken, err := token.SignedString(jwtSecret)
+	if err != nil {
+		return "", err
+	}
+
+	return signedToken, nil
 }
 
 func getRoundDetails(w http.ResponseWriter, r *http.Request) {

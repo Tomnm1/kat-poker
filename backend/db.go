@@ -12,6 +12,7 @@ import (
 var (
 	client     *mongo.Client
 	sessionCol *mongo.Collection
+	userCol    *mongo.Collection
 )
 
 func initMongoDB() {
@@ -31,6 +32,6 @@ func initMongoDB() {
 	}
 
 	sessionCol = client.Database("planning").Collection("sessions")
+	userCol = client.Database("planning").Collection("users")
 	log.Println("Connected to MongoDB")
 }
-

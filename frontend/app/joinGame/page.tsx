@@ -20,7 +20,13 @@ export default function JoinGamePage() {
     }
     //remove user data from local storage when the component mounts
     useEffect(() => {
-        localStorage.removeItem("username");
+  
+        const token = localStorage.getItem("token");
+
+        if (!token) {
+            localStorage.removeItem("username");
+        }
+       
     }, []);
 
     // Funkcja obsługująca wysyłanie zapytania o grę
