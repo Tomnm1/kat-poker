@@ -3,7 +3,8 @@ name: Deploy to Render
 on:
   push:
     branches:
-      - Render-+Vercel
+      - main
+      - 'Render-*'
 
 jobs:
   deploy:
