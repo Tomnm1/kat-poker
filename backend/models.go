@@ -1,22 +1,21 @@
 package main
 
 import (
-	"fmt"
 	"context"
-	"time"
+	"fmt"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo/options"
-	
+	"time"
 )
 
 type Session struct {
-	ID           string          `json:"id"`
-	Name         string          `json:"name"`
-	User_stories []string        `json:"user_stories"`
-	Tasks        map[int]string  `json:"tasks"`
-	Players      []string        `json:"players"`
-	CurrentRound *Round          `json:"currentRound,omitempty"`
-	RoundHistory []*Round        `json:"roundHistory,omitempty"`
+	ID           string         `json:"id"`
+	Name         string         `json:"name"`
+	User_stories []string       `json:"user_stories"`
+	Tasks        map[int]string `json:"tasks"`
+	Players      []string       `json:"players"`
+	CurrentRound *Round         `json:"currentRound,omitempty"`
+	RoundHistory []*Round       `json:"roundHistory,omitempty"`
 }
 
 type Round struct {
@@ -27,10 +26,10 @@ type User struct {
 	ID        string `json:"id"`
 	Username  string `json:"username"`
 	Password  string `json:"password"`
-	Token     string `json:"token,omitempty"`    
-	TokenTime int64  `json:"token_time,omitempty"` 
+	Token     string `json:"token,omitempty"`
+	TokenTime int64  `json:"token_time,omitempty"`
+	Avatar    string `json:"avatar" bson:"avatar"`
 }
-
 
 func saveSession(session *Session) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
@@ -53,8 +52,6 @@ func getSession(id string) (*Session, error) {
 	}
 	return &session, nil
 }
-
-
 
 func saveUser(user *User) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
@@ -83,15 +80,13 @@ func getUserByUsername(username string) (*User, error) {
 	return &user, nil
 }
 
-
 func updateUser(user *User) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-
 	_, err := userCol.UpdateOne(
 		ctx,
-		bson.M{"username": user.Username}, 
+		bson.M{"username": user.Username},
 		bson.M{
 			"$set": bson.M{
 				"token":      user.Token,
@@ -117,4 +112,25 @@ func getUserByID(userID string) (*User, error) {
 		return nil, fmt.Errorf("błąd przy pobieraniu użytkownika: %w", err)
 	}
 	return &user, nil
+}
+
+func updateUserAvatar(userID, avatar string) error {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	_, err := userCol.UpdateOne(
+		ctx,
+		bson.M{"id": userID},
+		bson.M{
+			"$set": bson.M{
+				"avatar": avatar,
+			},
+		},
+	)
+
+	if err != nil {
+		return fmt.Errorf("błąd podczas aktualizacji avatara: %w", err)
+	}
+
+	return nil
 }
