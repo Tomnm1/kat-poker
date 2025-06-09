@@ -23,21 +23,10 @@ func initMongoDB() {
 	var err error
 	mongoURI := os.Getenv("MONGO_URI")
 	if mongoURI == "" {
-		// Pobierz zmienne środowiskowe
-		username := os.Getenv("MONGO_USERNAME")
-		password := os.Getenv("MONGO_PASSWORD")
-		cluster := os.Getenv("MONGO_CLUSTER")
-		
-		if username != "" && password != "" && cluster != "" {
-			mongoURI = fmt.Sprintf("mongodb+srv://%s:%s@%s/planning?retryWrites=true&w=majority&authSource=admin", username, password, cluster)
-		} else {
-			mongoURI = "mongodb://mongo:mongo@localhost:27017"
-		}
+		mongoURI = "mongodb://mongo:mongo@localhost:27017"
 	}
-	
-	// Debug - ukryj hasło w logach
-	log.Printf("Connecting to MongoDB with URI: %s", mongoURI[:strings.Index(mongoURI, "://")+3]+"***")
-	
+
+	log.Println("Attempting MongoDB connection...")
 	clientOptions := options.Client().ApplyURI(mongoURI)
 	client, err = mongo.Connect(ctx, clientOptions)
 	if err != nil {
