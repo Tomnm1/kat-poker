@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { postData } from "../utils/http"; // Assuming postData sends POST requests to your backend
 import Link from "next/link";
+import {ConsentCheckbox} from "@/app/register/consent-checkbox";
 
 export default function RegistrationPage() {
     const [username, setUsername] = useState<string>(""); // Stores the username entered by the user
@@ -11,6 +12,8 @@ export default function RegistrationPage() {
     const [confirmPassword, setConfirmPassword] = useState<string>(""); // Confirms password
     const [loading, setLoading] = useState<boolean>(false); // Loading state for the request
     const [error, setError] = useState<string>("");
+    const [privacyConsent, setPrivacyConsent] = useState<boolean>(false);
+
 
     const router = useRouter(); // Hook to handle navigation
 
@@ -74,6 +77,12 @@ export default function RegistrationPage() {
                 className="mt-4 p-2 rounded border border-gray-300 focus:outline-none focus:ring-2 focus:ring-green-600"
                 placeholder="Confirm Password"
             />
+            <ConsentCheckbox
+                checked={privacyConsent}
+                onChangeAction={setPrivacyConsent}
+                required={true}
+            />
+
 
             {error && <p className="mt-2 text-red-500">{error}</p>}
 
