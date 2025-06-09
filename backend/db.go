@@ -5,6 +5,7 @@ import (
 	"log"
 	"time"
 	"os"
+	"strings"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
 )
@@ -21,9 +22,12 @@ func initMongoDB() {
 	var err error
 	mongoURI := os.Getenv("MONGO_URI")
 	if mongoURI == "" {
-		mongoURI = fmt.Sprintf("mongodb+srv://%s:%s@%s/planning?retryWrites=true&w=majority&authSource=admin", username, password, cluster)
+		mongoURI = "mongodb://mongo:mongo@localhost:27017"
 	}
-
+	
+	// Debug - ukryj hasło w logach
+	log.Printf("Connecting to MongoDB with URI: %s", mongoURI[:strings.Index(mongoURI, "://")+3]+"***")
+	
 	clientOptions := options.Client().ApplyURI(mongoURI)
 	client, err = mongo.Connect(ctx, clientOptions)
 	if err != nil {
@@ -38,4 +42,3 @@ func initMongoDB() {
 	sessionCol = client.Database("planning").Collection("sessions")
 	log.Println("Connected to MongoDB")
 }
-

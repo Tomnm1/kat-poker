@@ -26,12 +26,8 @@ func main() {
 	handler := corsOptions.Handler(r)
 
 	// Start the server with CORS enabled
-	port := os.Getenv("PORT")
-	if port == "" {
-		port = "8080"
-	}
-	log.Printf("Server is running on port :%s", port)
-	if err := http.ListenAndServe(":"+port, handler); err != nil {
+	log.Println("Server is running on port :8080")
+	if err := http.ListenAndServe(":8080", handler); err != nil {
 		log.Fatalf("Error starting server: %v", err)
 	}
 }
