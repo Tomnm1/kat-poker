@@ -3,7 +3,7 @@ name: Deploy to Render (unsafe)
 on:
   push:
     branches:
-      - main
+      - Render-+Vercel
 
 jobs:
   deploy:
