@@ -9,11 +9,12 @@ import PlayersList from "../components/PlayersList";
 import RoundHistory from "../components/RoundHistory";
 import VotingPanel from "../components/VotingPanel";
 // Modyfikacja page.tsx - dodajemy tylko nowe funkcjonalności związane z rundami
-
 // Dodaj RoundSummary do importów
 import RoundSummary from "../components/RoundSummary";
 // W page.tsx, dodaj import:
 import RoundIndicator from "../components/RoundIndicator";
+import { DeleteConfirmationModal } from "@/components/delete-confirmation-modal";
+import { useDeleteConfirmation } from "@/hooks/use-delete-confirmation";
 
 interface Round {
     id: string;
@@ -64,6 +65,38 @@ const GamePage = () => {
     const [activeTaskIndex, setActiveTaskIndex] = useState<number | null>(null);
     const [tasksState, setTasksState] = useState<{ [idx: number]: string[] }>({});
     const [taskInput, setTaskInput] = useState<string>("");
+
+    // Delete confirmation hooks
+    const storyDeleteConfirmation = useDeleteConfirmation({
+        onSuccess: () => {
+            console.log('User story deleted successfully');
+            fetchGameInfo();
+        },
+        onError: (error) => {
+            console.error('Error deleting user story:', error);
+            setError('Failed to delete user story. Please try again.');
+        }
+    });
+
+    const gameQuitConfirmation = useDeleteConfirmation({
+        confirmMessage: `Are you sure you want to quit "${gameName}"?`,
+        onSuccess: () => {
+            if (username && !localStorage.getItem("token")) {
+                localStorage.removeItem("username");
+                localStorage.removeItem("token");
+            }
+            localStorage.removeItem("round_started");
+            localStorage.removeItem("hasShownJoinDialog");
+            setJoined(false);
+            router.push(`/`);
+        },
+        onError: (error) => {
+            console.error('Error quitting game:', error);
+            setError('Failed to quit game. Please try again.');
+        }
+    });
+
+
 
     useEffect(() => {
         if (id) {
@@ -244,22 +277,14 @@ const GamePage = () => {
         if (!gameId || !username) return;
         setLoading(true);
         try {
-            await deleteData(`/sessions/${gameId}/players/${username}`);
-            if (username && !localStorage.getItem("token")) {
-                localStorage.removeItem("username");
-                localStorage.removeItem("token");
-            }
-
-            localStorage.removeItem("round_started");
-            localStorage.removeItem("hasShownJoinDialog");
-            setJoined(false);
-            router.push(`/`);
+            gameQuitConfirmation.requestDelete(`/sessions/${gameId}/players/${username}`);
         } catch (error: any) {
             setError(error.message || "Something went wrong.");
         } finally {
             setLoading(false);
         }
     };
+
 
     const startRound = async () => {
         if (!gameId) return;
@@ -271,7 +296,7 @@ const GamePage = () => {
                 setSubmitted(false);
                 setSelectedValue(null);
                 setPlayerVotes({});
-                setShowHistory(false); // Przełącz widok na bieżącą rundę
+                setShowHistory(false);
             } catch (error: any) {
                 setError(error.message || "Something went wrong.");
             } finally {
@@ -334,15 +359,16 @@ const GamePage = () => {
         }
     };
 
-    const handleDeleteStory = async (index: number) => {
+    const handleDeleteStory = async (index: number, storyContent: string) => {
         if (!gameId) return;
-        try {
-            await deleteData(`/sessions/${gameId}/stories/${index}`);
-            fetchGameInfo();
-        } catch (err: any) {
-            setError(err.message || "Failed to delete story");
-        }
+        
+        const confirmMessage = `Are you sure you want to delete this user story?\n\n"${storyContent}"\n\nThis will also remove all associated tasks and cannot be undone!`;
+        
+        // Set custom message and request deletion
+        storyDeleteConfirmation.confirmMessage = confirmMessage;
+        storyDeleteConfirmation.requestDelete(`/sessions/${gameId}/stories/${index}`);
     };
+
 
     const handleAddTask = async (index: number) => {
         if (!gameId || !taskInput.trim()) return;
@@ -532,6 +558,7 @@ const GamePage = () => {
                                         </>
                                     )}
                                 </div>
+                                
                                 <div className="bg-gray-800 rounded-lg p-4 shadow-lg mb-6 mt-6">
                                     <h3 className="text-xl font-bold text-white mb-4">
                                         User Stories
@@ -540,10 +567,10 @@ const GamePage = () => {
                                         {session?.user_stories?.map((story, idx) => (
                                             <li key={idx} className="text-white mb-3">
                                                 <div className="flex justify-between items-center">
-                                                    <span>{story}</span>
-                                                    <div className="flex gap-2">
+                                                    <span className="flex-1 mr-4">{story}</span>
+                                                    <div className="flex gap-2 flex-shrink-0">
                                                         <button
-                                                            className="text-blue-500 hover:underline"
+                                                            className="text-blue-400 hover:text-blue-300 hover:underline text-sm px-2 py-1 rounded transition-colors"
                                                             onClick={() => {
                                                                 setActiveTaskIndex(idx);
                                                                 setTaskInput("");
@@ -552,10 +579,22 @@ const GamePage = () => {
                                                             Add task
                                                         </button>
                                                         <button
-                                                            className="text-red-500 hover:underline"
-                                                            onClick={() => handleDeleteStory(idx)}
+                                                            className="text-red-400 hover:text-red-300 hover:underline text-sm px-2 py-1 rounded transition-colors flex items-center gap-1"
+                                                            onClick={() => handleDeleteStory(idx, story)}
+                                                            disabled={storyDeleteConfirmation.isDeleting}
                                                         >
-                                                            Delete
+                                                            {storyDeleteConfirmation.isDeleting && 
+                                                             storyDeleteConfirmation.pendingPath?.includes(`stories/${idx}`) ? (
+                                                                <>
+                                                                    <svg className="animate-spin h-3 w-3" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                                                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                                                                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                                                    </svg>
+                                                                    Deleting...
+                                                                </>
+                                                            ) : (
+                                                                <>🗑️ Delete</>
+                                                            )}
                                                         </button>
                                                     </div>
                                                 </div>
@@ -622,12 +661,22 @@ const GamePage = () => {
                         <div className="text-center mt-6">
                             <button
                                 onClick={quitGame}
-                                disabled={loading}
-                                className={`px-4 py-2 text-lg font-semibold text-white bg-gray-600 rounded hover:bg-gray-700 transition duration-200 ${
-                                    loading ? "bg-gray-400 cursor-not-allowed" : ""
+                                disabled={loading || gameQuitConfirmation.isDeleting}
+                                className={`px-4 py-2 text-lg font-semibold text-white bg-red-600 rounded hover:bg-red-700 transition duration-200 flex items-center justify-center mx-auto gap-2 ${
+                                    loading || gameQuitConfirmation.isDeleting ? "bg-red-400 cursor-not-allowed" : ""
                                 }`}
                             >
-                                Quit Game
+                                {gameQuitConfirmation.isDeleting ? (
+                                    <>
+                                        <svg className="animate-spin h-5 w-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                        </svg>
+                                        Quitting Game...
+                                    </>
+                                ) : (
+                                    <>🚪 Quit Game</>
+                                )}
                             </button>
                         </div>
                     </div>
@@ -641,6 +690,27 @@ const GamePage = () => {
                     <p className="text-center">{error}</p>
                 </div>
             )}
+
+            {/* Delete Confirmation Modals */}
+            <DeleteConfirmationModal
+                isOpen={storyDeleteConfirmation.isConfirmOpen}
+                isDeleting={storyDeleteConfirmation.isDeleting}
+                message={storyDeleteConfirmation.confirmMessage}
+                onConfirm={storyDeleteConfirmation.confirmDelete}
+                onCancel={storyDeleteConfirmation.cancelDelete}
+                title="🗑️ DELETE USER STORY"
+            />
+
+            <DeleteConfirmationModal
+                isOpen={gameQuitConfirmation.isConfirmOpen}
+                isDeleting={gameQuitConfirmation.isDeleting}
+                message={gameQuitConfirmation.confirmMessage}
+                onConfirm={gameQuitConfirmation.confirmDelete}
+                onCancel={gameQuitConfirmation.cancelDelete}
+                title="🚪 QUIT GAME CONFIRMATION"
+            />
+
+
         </div>
     );
 };

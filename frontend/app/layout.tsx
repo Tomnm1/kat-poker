@@ -1,6 +1,9 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
+import {CookieBanner} from "@/components/cookie-banner";
+import {CookieStatusIndicator} from "@/components/cookie-indicator";
+import {ReactNode} from "react";
 
 const geistSans = Geist({
     variable: "--font-geist-sans",
@@ -20,7 +23,7 @@ export const metadata: Metadata = {
 export default function RootLayout({
     children,
 }: Readonly<{
-    children: React.ReactNode;
+    children: ReactNode;
 }>) {
     return (
         <html lang="en">
@@ -28,6 +31,8 @@ export default function RootLayout({
                 className={`${geistSans.variable} ${geistMono.variable} antialiased bg-gradient-to-b from-gray-900 to-gray-800`}
             >
                 {children}
+                <CookieBanner />
+                <CookieStatusIndicator />
             </body>
         </html>
     );
