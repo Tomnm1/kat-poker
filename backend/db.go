@@ -22,7 +22,7 @@ func initMongoDB() {
 	var err error
 	mongoURI := os.Getenv("MONGO_URI")
 	if mongoURI == "" {
-		mongoURI = "mongodb://mongo:mongo@localhost:27017"
+		mongoURI = fmt.Sprintf("mongodb+srv://%s:%s@%s/planning?retryWrites=true&w=majority&authSource=admin", username, password, cluster)
 	}
 	
 	// Debug - ukryj hasło w logach
