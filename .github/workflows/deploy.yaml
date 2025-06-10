@@ -9,8 +9,11 @@ on:
 jobs:
   deploy:
     runs-on: ubuntu-latest
+    environment: Production
+
+
 
     steps:
       - name: Trigger Render Deploy Hook
         run: |
-          curl -X POST ${{ secrets.RENDER_DEPLOY_HOOK_URL }}
+          curl -X POST "${{ secrets.RENDER_DEPLOY_HOOK_URL }}"
