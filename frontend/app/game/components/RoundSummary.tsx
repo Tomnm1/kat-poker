@@ -237,7 +237,7 @@ const RoundSummary: React.FC<RoundSummaryProps> = ({ roundHistory, players }) =>
 };
 
 const calculateConsensus = (votes: number[]): string => {
-    if (votes.length < 2) return "N/A";
+    if (votes.length < 2) return "Perfect";
 
     const allSame = votes.every(v => v === votes[0]);
     if (allSame) return "Perfect";

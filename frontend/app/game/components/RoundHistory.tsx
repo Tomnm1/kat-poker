@@ -5,6 +5,8 @@ import React, { useState } from "react";
 interface Round {
     id: string;
     votes: Record<string, number>;
+    user_stories?: string[];
+    tasks?: Record<number, string>;
 }
 
 interface RoundHistoryProps {
@@ -37,82 +39,100 @@ const RoundHistory: React.FC<RoundHistoryProps> = ({ roundHistory, players }) =>
     const nonVoters = players.filter(player => !Object.keys(currentRound.votes).includes(player));
 
     return (
-      <div className="p-6 text-white">
-        <div className="flex justify-between items-center mb-4">
-          <h2 className="text-xl font-bold">Round History</h2>
-          <div className="text-sm bg-gray-700 px-3 py-1 rounded">
-            Round {roundNumber} of {roundHistory.length}
-          </div>
-        </div>
-
-        <div className="flex justify-between items-center mb-6 bg-gray-700 p-2 rounded">
-          <button
-            onClick={() => setCurrentIndex(prev => Math.max(0, prev - 1))}
-            disabled={currentIndex === 0}
-            className="px-3 py-1 bg-blue-600 rounded disabled:bg-gray-600 disabled:opacity-50"
-          >
-            Previous
-          </button>
-
-          <div className="flex space-x-2">
-            {roundHistory.map((_, idx) => (
-              <button
-                key={idx}
-                onClick={() => setCurrentIndex(idx)}
-                className={`w-3 h-3 rounded-full ${
-                  idx === currentIndex ? "bg-blue-500" : "bg-gray-500"
-                }`}
-                aria-label={`Go to round ${idx + 1}`}
-              />
-            ))}
-          </div>
-
-          <button
-            onClick={() => setCurrentIndex(prev => Math.min(roundHistory.length - 1, prev + 1))}
-            disabled={currentIndex === roundHistory.length - 1}
-            className="px-3 py-1 bg-blue-600 rounded disabled:bg-gray-600 disabled:opacity-50"
-          >
-            Next
-          </button>
-        </div>
-
-        <div className="mb-6">
-          <h3 className="text-lg font-semibold mb-3 border-b border-gray-700 pb-2">Round Votes</h3>
-          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
-            {votes.map(([player, vote]) => (
-              <div key={player} className="bg-gray-700 p-3 rounded flex flex-col items-center">
-                <div className="text-xl font-bold mb-1">{vote}</div>
-                <div className="text-sm text-gray-300">{player}</div>
-              </div>
-            ))}
-
-            {nonVoters.map(player => (
-              <div key={player} className="bg-gray-700 p-3 rounded opacity-50 flex flex-col items-center">
-                <div className="text-sm italic mb-1">Did not vote</div>
-                <div className="text-sm text-gray-300">{player}</div>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        <div className="bg-gray-700 p-4 rounded">
-          <h3 className="text-lg font-semibold mb-2 text-center">Round Statistics</h3>
-          <div className="grid grid-cols-3 gap-4">
-            <div className="text-center">
-              <div className="text-sm text-gray-300">Average</div>
-              <div className="text-xl font-bold">{average.toFixed(1)}</div>
+        <div className="p-6 text-white">
+            <div className="flex justify-between items-center mb-4">
+                <h2 className="text-xl font-bold">Round History</h2>
+                <div className="text-sm bg-gray-700 px-3 py-1 rounded">
+                    Round {roundNumber} of {roundHistory.length}
+                </div>
             </div>
-            <div className="text-center">
-              <div className="text-sm text-gray-300">Min</div>
-              <div className="text-xl font-bold">{min}</div>
+
+            <div className="flex justify-between items-center mb-6 bg-gray-700 p-2 rounded">
+                <button
+                    onClick={() => setCurrentIndex(prev => Math.max(0, prev - 1))}
+                    disabled={currentIndex === 0}
+                    className="px-3 py-1 bg-blue-600 rounded disabled:bg-gray-600 disabled:opacity-50"
+                >
+                    Previous
+                </button>
+
+                <div className="flex space-x-2">
+                    {roundHistory.map((_, idx) => (
+                        <button
+                            key={idx}
+                            onClick={() => setCurrentIndex(idx)}
+                            className={`w-3 h-3 rounded-full ${
+                                idx === currentIndex ? "bg-blue-500" : "bg-gray-500"
+                            }`}
+                            aria-label={`Go to round ${idx + 1}`}
+                        />
+                    ))}
+                </div>
+
+                <button
+                    onClick={() => setCurrentIndex(prev => Math.min(roundHistory.length - 1, prev + 1))}
+                    disabled={currentIndex === roundHistory.length - 1}
+                    className="px-3 py-1 bg-blue-600 rounded disabled:bg-gray-600 disabled:opacity-50"
+                >
+                    Next
+                </button>
             </div>
-            <div className="text-center">
-              <div className="text-sm text-gray-300">Max</div>
-              <div className="text-xl font-bold">{max}</div>
+
+            {currentRound.user_stories && currentRound.user_stories.length > 0 && (
+                <div className="mb-6">
+                    <h3 className="text-lg font-semibold mb-3 border-b border-gray-700 pb-2">User Stories</h3>
+                    <ul className="list-disc list-inside space-y-2">
+                        {currentRound.user_stories.map((story, idx) => (
+                            <li key={idx}>
+                                <span className="font-bold">{story}</span>
+                                {currentRound.tasks?.[idx] && (
+                                    <div className="ml-4 mt-1 text-sm text-green-300 border-l-2 border-green-500 pl-2">
+                                        Task: {currentRound.tasks[idx]}
+                                    </div>
+                                )}
+                            </li>
+                        ))}
+                    </ul>
+                </div>
+            )}
+
+            <div className="mb-6">
+                <h3 className="text-lg font-semibold mb-3 border-b border-gray-700 pb-2">Votes</h3>
+                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
+                    {votes.map(([player, vote]) => (
+                        <div key={player} className="bg-gray-700 p-3 rounded flex flex-col items-center">
+                            <div className="text-xl font-bold mb-1">{vote}</div>
+                            <div className="text-sm text-gray-300">{player}</div>
+                        </div>
+                    ))}
+
+                    {nonVoters.map(player => (
+                        <div key={player} className="bg-gray-700 p-3 rounded opacity-50 flex flex-col items-center">
+                            <div className="text-sm italic mb-1">Did not vote</div>
+                            <div className="text-sm text-gray-300">{player}</div>
+                        </div>
+                    ))}
+                </div>
             </div>
-          </div>
+
+            <div className="bg-gray-700 p-4 rounded">
+                <h3 className="text-lg font-semibold mb-2 text-center">Round Statistics</h3>
+                <div className="grid grid-cols-3 gap-4">
+                    <div className="text-center">
+                        <div className="text-sm text-gray-300">Average</div>
+                        <div className="text-xl font-bold">{average.toFixed(1)}</div>
+                    </div>
+                    <div className="text-center">
+                        <div className="text-sm text-gray-300">Min</div>
+                        <div className="text-xl font-bold">{min}</div>
+                    </div>
+                    <div className="text-center">
+                        <div className="text-sm text-gray-300">Max</div>
+                        <div className="text-xl font-bold">{max}</div>
+                    </div>
+                </div>
+            </div>
         </div>
-      </div>
     );
 };
 

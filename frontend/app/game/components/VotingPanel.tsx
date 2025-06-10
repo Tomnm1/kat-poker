@@ -127,22 +127,66 @@ return (
     {!submitted && !revealed && (
       <span className="text-lg mb-4 text-white font-semibold">Choose your estimation:</span>
     )}
-    
-    <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-2 mb-6">
-      {storyPoints.map((num) => (
-        <div key={num} className="flex justify-center">
-          <Card
-            number={num}
-            onClick={() => handleCardToggle(num)}
-            isSelected={selectedValue === num}
-            disabled={submitted || revealed}
-            card_styles={`transition-transform duration-200 ${
-              selectedValue === num ? "scale-110 border-4 border-yellow-400" : "hover:scale-105"
-            }`}
-          />
+
+    <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
+      <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-2">
+        {storyPoints.map((num) => (
+          <div key={num} className="flex justify-center">
+            <Card
+              number={num}
+              onClick={() => handleCardToggle(num)}
+              isSelected={selectedValue === num}
+              disabled={submitted || revealed}
+              card_styles={`transition-transform duration-200 ${
+                selectedValue === num
+                  ? "scale-110 border-4 border-yellow-400"
+                  : "hover:scale-105"
+              }`}
+            />
+          </div>
+        ))}
+      </div>
+
+      {!submitted && !revealed && (
+        <div className="flex flex-col justify-center items-center sm:items-center">
+          <p className="text-gray-400 text-sm mb-2">Not sure what to choose?</p>
+          <button
+            onClick={() => {
+              const unselected = storyPoints.filter((sp) => sp !== selectedValue);
+              const random =
+                unselected[Math.floor(Math.random() * unselected.length)];
+              setSelectedValue(random);
+            }}
+            className="px-3 py-2 text-sm text-white bg-yellow-500 rounded hover:bg-yellow-600 transition duration-200"
+          >
+            Suggest for Me
+          </button>
         </div>
-      ))}
+      )}
     </div>
+
+    {!revealed && (
+      <div className="flex gap-4 mt-2">
+        {submitted ? (
+          <button
+            onClick={rollbackVote}
+            className="px-4 py-2 text-white bg-red-600 rounded hover:bg-red-700 transition duration-200"
+          >
+            Cancel Vote
+          </button>
+        ) : (
+          <button
+            onClick={submitChoice}
+            disabled={selectedValue === null}
+            className={`px-4 py-2 text-white bg-pink-600 rounded hover:bg-pink-700 transition duration-200 ${
+              selectedValue === null ? "opacity-50 cursor-not-allowed" : ""
+            }`}
+          >
+            Submit Vote
+          </button>
+        )}
+      </div>
+    )}
     
     <div className="mt-2 mb-4 w-full">
       <div className="flex justify-between text-sm text-gray-300 mb-1">
@@ -187,28 +231,6 @@ return (
       </div>
     )}
 
-    {!revealed && (
-      <div className="flex gap-4 mt-2">
-        {submitted ? (
-          <button
-            onClick={rollbackVote}
-            className="px-4 py-2 text-white bg-red-600 rounded hover:bg-red-700 transition duration-200"
-          >
-            Cancel Vote
-          </button>
-        ) : (
-          <button
-            onClick={submitChoice}
-            disabled={selectedValue === null}
-            className={`px-4 py-2 text-white bg-pink-600 rounded hover:bg-pink-700 transition duration-200 ${
-              selectedValue === null ? "opacity-50 cursor-not-allowed" : ""
-            }`}
-          >
-            Submit Vote
-          </button>
-        )}
-      </div>
-    )}
   </div>
 );
 };
