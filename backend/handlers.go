@@ -533,24 +533,28 @@ func startRound(w http.ResponseWriter, r *http.Request) {
 		}
 		session.RoundHistory = append(session.RoundHistory, session.CurrentRound)
 	}
+	session.User_stories = []string{}
+	session.Tasks = map[int]string{}
+
 
 	round := &Round{
-		ID:    fmt.Sprintf("round-%d", roundNumber),
-		Votes: make(map[string]int),
+		ID:          fmt.Sprintf("round-%d", roundNumber),
+		Votes:       make(map[string]int),
+		UserStories: []string{},
+		Tasks:       map[int]string{},
+		ActiveStory: 0,
 	}
 	session.CurrentRound = round
 
 	notifySessionParticipants(id, "/starting")
 
-	// Save the session with the new round
 	if err := saveSession(session); err != nil {
 		http.Error(w, "Błąd przy aktualizacji rundy", http.StatusInternalServerError)
 		return
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	err = json.NewEncoder(w).Encode(round)
-	if err != nil {
+	if err := json.NewEncoder(w).Encode(round); err != nil {
 		http.Error(w, "Wystąpił błąd", http.StatusInternalServerError)
 		return
 	}
@@ -788,7 +792,14 @@ func addStoryHandler(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Sesja nie znaleziona", http.StatusNotFound)
 		return
 	}
-	session.User_stories = append(session.User_stories, payload.Story)
+
+	if session.CurrentRound == nil {
+		http.Error(w, "Brak aktywnej rundy", http.StatusBadRequest)
+		return
+	}
+
+	session.CurrentRound.User_stories = append(session.CurrentRound.User_stories, payload.Story)
+
 	if err := saveSession(session); err != nil {
 		http.Error(w, "Błąd przy dodawaniu user story", http.StatusInternalServerError)
 		return
@@ -825,12 +836,26 @@ func deleteStoryHandler(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Sesja nie znaleziona", http.StatusNotFound)
 		return
 	}
-	if index < 0 || index >= len(session.User_stories) {
+
+	if session.CurrentRound == nil {
+		http.Error(w, "Brak aktywnej rundy", http.StatusBadRequest)
+		return
+	}
+
+	if index < 0 || index >= len(session.CurrentRound.User_stories) {
 		http.Error(w, "invalid story index", http.StatusNotFound)
 		return
 	}
-	session.User_stories = append(session.User_stories[:index], session.User_stories[index+1:]...)
-	delete(session.Tasks, index)
+
+	session.CurrentRound.User_stories = append(
+		session.CurrentRound.User_stories[:index],
+		session.CurrentRound.User_stories[index+1:]...,
+	)
+
+	if session.CurrentRound.Tasks != nil {
+		delete(session.CurrentRound.Tasks, index)
+	}
+
 	if err := saveSession(session); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -868,6 +893,16 @@ func addStoryTaskHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if session.CurrentRound == nil {
+		http.Error(w, "Brak aktywnej rundy", http.StatusBadRequest)
+		return
+	}
+
+	if index < 0 || index >= len(session.CurrentRound.User_stories) {
+		http.Error(w, "invalid story index", http.StatusNotFound)
+		return
+	}
+
 	var payload struct {
 		Task string `json:"task"`
 	}
@@ -876,15 +911,16 @@ func addStoryTaskHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if index < 0 || index >= len(session.User_stories) {
-		http.Error(w, "invalid story index", http.StatusNotFound)
-		return
+	if session.CurrentRound.Tasks == nil {
+		session.CurrentRound.Tasks = make(map[int]string)
 	}
 
-	if session.Tasks == nil {
-		session.Tasks = make(map[int]string)
+	session.CurrentRound.Tasks[index] = payload.Task
+
+	if err := saveSession(session); err != nil {
+		http.Error(w, "Wystąpił błąd zapisu", http.StatusInternalServerError)
+		return
 	}
-	session.Tasks[index] = payload.Task
 
 	message := fmt.Sprintf("/task-added:%s", indexStr)
 	for _, conn := range wsConnections[sessionID] {
@@ -893,7 +929,7 @@ func addStoryTaskHandler(w http.ResponseWriter, r *http.Request) {
 
 	notifySessionParticipants(sessionID, "/task-added")
 	w.Header().Set("Content-Type", "application/json")
-	err = json.NewEncoder(w).Encode(session.Tasks)
+	err = json.NewEncoder(w).Encode(session.CurrentRound.Tasks)
 	if err != nil {
 		http.Error(w, "Wystąpił błąd", http.StatusInternalServerError)
 		return

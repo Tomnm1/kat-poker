@@ -22,6 +22,7 @@ export default function JoinGamePage() {
     useEffect(() => {
   
         const token = localStorage.getItem("token");
+        localStorage.removeItem("hasShownJoinDialog");
 
         if (!token) {
             localStorage.removeItem("username");

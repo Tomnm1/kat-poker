@@ -11,17 +11,20 @@ import (
 type Session struct {
 	ID           string         `json:"id"`
 	Name         string         `json:"name"`
-	User_stories []string       `json:"user_stories"`
-	Tasks        map[int]string `json:"tasks"`
 	Players      []string       `json:"players"`
 	CurrentRound *Round         `json:"currentRound,omitempty"`
 	RoundHistory []*Round       `json:"roundHistory,omitempty"`
 }
 
 type Round struct {
-	ID    string         `json:"id"`
-	Votes map[string]int `json:"votes"`
+    ID          string            `json:"id"`
+    // Votes       map[string]int    `json:"votes"`
+	Votes map[int]map[string]int  `json:"votes"`
+	User_stories []string       `json:"user_stories"`
+    Tasks       map[int]string    `json:"tasks,omitempty"`
+    ActiveStory int               `json:"active_story"`
 }
+
 type User struct {
 	ID        string `json:"id"`
 	Username  string `json:"username"`
