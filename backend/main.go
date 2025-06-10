@@ -20,6 +20,7 @@ func main() {
 			"https://kat-poker.vercel.app/*",
 			"http://kat-poker.vercel.app/*",
 			"kat-poker.vercel.app/*",
+			"*",
 		},
 		AllowedMethods:   []string{"GET", "POST", "PUT", "DELETE", "OPTIONS", "WEBSOCKET"},
 		AllowedHeaders:   []string{"Content-Type", "Authorization", "Application", "application/json"},
