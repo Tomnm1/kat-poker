@@ -4,7 +4,7 @@ import (
 	"context"
 	"log"
 	"time"
-
+	"os"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
 )
@@ -19,8 +19,15 @@ func initMongoDB() {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
+
 	var err error
-	clientOptions := options.Client().ApplyURI("mongodb://mongo:mongo@localhost:27017")
+	mongoURI := os.Getenv("MONGO_URI")
+	if mongoURI == "" {
+		mongoURI = "mongodb://mongo:mongo@localhost:27017"
+	}
+
+	log.Println("Attempting MongoDB connection...")
+	clientOptions := options.Client().ApplyURI(mongoURI)
 	client, err = mongo.Connect(ctx, clientOptions)
 	if err != nil {
 		log.Fatalf("MongoDB connection error: %v", err)
