@@ -135,7 +135,7 @@ const GamePage = () => {
         let ws: WebSocket;
         const url = process.env.NEXT_PUBLIC_BACKEND_URL;
         if (gameId) {
-            ws = new WebSocket(`ws://kat-poker-8.onrender.com/sessions/${gameId}/ws`);
+            ws = new WebSocket(`wss://kat-poker-8.onrender.com/sessions/${gameId}/ws`);
 
             ws.onopen = () => {
                 console.log("WebSocket connection established");
