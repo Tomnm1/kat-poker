@@ -14,6 +14,7 @@ import RoundSummary from "../components/RoundSummary";
 import RoundIndicator from "../components/RoundIndicator";
 import { DeleteConfirmationModal } from "@/components/delete-confirmation-modal";
 import { useDeleteConfirmation } from "@/hooks/use-delete-confirmation";
+import {deleteData} from "@/app/utils/api/delete";
 
 interface Round {
     id: string;
