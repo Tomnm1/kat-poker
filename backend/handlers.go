@@ -102,7 +102,7 @@ func GetAvatars(w http.ResponseWriter, r *http.Request) {
 		"🦄", "🐉", "🔥", "⭐", "🌟", "💫", "🎊", "🎈",
 	}
 
-	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
 	json.NewEncoder(w).Encode(map[string][]string{"avatars": avatars})
 }
 func updateAvatarHandler(w http.ResponseWriter, r *http.Request) {
