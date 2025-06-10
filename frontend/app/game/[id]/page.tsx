@@ -1,6 +1,5 @@
 "use client";
 
-import { deleteData } from "@/app/utils/api/delete";
 import { getData, postData } from "@/app/utils/http";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useState } from "react";
@@ -134,9 +133,9 @@ const GamePage = () => {
         }
 
         let ws: WebSocket;
-
+        const url = process.env.NEXT_PUBLIC_BACKEND_URL;
         if (gameId) {
-            ws = new WebSocket(`ws://localhost:8080/sessions/${gameId}/ws`);
+            ws = new WebSocket(`ws://${url}/sessions/${gameId}/ws`);
 
             ws.onopen = () => {
                 console.log("WebSocket connection established");
