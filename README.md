@@ -13,3 +13,6 @@ npm install
 ``` bash
 npm run dev
 ```
+
+# team agile board:
+https://katpoker.youtrack.cloud/agiles/182-2/current
